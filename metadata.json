@@ -1,0 +1,8 @@
+{
+  "name": "Remix KIOXIA SIGNAL (285A) 投資判断支援",
+  "description": "キオクシアホールディングス（285A）のリアルタイム株価、VWAP、テクニカル指標、米国半導体（NVDA/MU/SOX）、曜日・時間帯別統計、AI市場コメントを統合した投資判断支援Webアプリ",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
