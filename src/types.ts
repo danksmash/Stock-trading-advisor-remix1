@@ -12,9 +12,9 @@ export type MarketSessionStatus =
 
 export type PtsSignalType = 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE' | 'DATA UNAVAILABLE';
 
-export type DataQuality = 'LIVE' | 'RECENT' | 'DELAYED' | 'STALE' | 'ERROR' | 'UNAVAILABLE';
+export type DataQuality = 'LIVE' | 'RECENT' | 'DELAYED' | 'STALE' | 'ERROR' | 'UNAVAILABLE' | 'DEMO';
 
-export type PtsDataQuality = 'LIVE' | 'RECENT' | 'STALE' | 'ERROR' | 'UNAVAILABLE';
+export type PtsDataQuality = 'LIVE' | 'RECENT' | 'STALE' | 'ERROR' | 'UNAVAILABLE' | 'DEMO';
 
 export type NewsSentiment = 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE';
 
@@ -196,7 +196,7 @@ export interface UsSemiQuote {
   afterHoursPrice?: number;
   afterHoursChangePercent?: number;
   lastUpdated: string;
-  freshness: 'LIVE' | 'MINUTES_AGO' | 'DELAYED' | 'FAILED';
+  freshness: 'LIVE' | 'MINUTES_AGO' | 'DELAYED' | 'FAILED' | 'DEMO';
   category: 'CHIP' | 'MEMORY' | 'INDEX' | 'MACRO' | 'FX';
   details?: {
     nextEarningsDate?: string;

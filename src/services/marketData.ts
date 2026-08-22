@@ -238,7 +238,7 @@ export class RealApiMarketDataProvider implements IMarketDataProvider {
         intraday5m,
         hourly1h: [],
         daily1d,
-        dataFreshness: 'LIVE',
+        dataFreshness: 'DEMO',
         lastUpdated: `${jstString} (DEMO SIMULATION)`,
         isMarketOpen: false,
         isPreMarket: false,
@@ -466,16 +466,16 @@ export class RealApiMarketDataProvider implements IMarketDataProvider {
       const now = new Date();
       const jstString = now.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' }) + ' JST';
       return [
-        { symbol: 'NVDA', name: 'NVIDIA Corp', price: 148.52, change: 4.61, changePercent: 3.21, afterHoursPrice: 149.10, afterHoursChangePercent: 0.39, lastUpdated: jstString, freshness: 'LIVE', category: 'CHIP' },
-        { symbol: 'MU', name: 'Micron Technology', price: 112.40, change: 5.23, changePercent: 4.88, afterHoursPrice: 112.85, afterHoursChangePercent: 0.40, lastUpdated: jstString, freshness: 'LIVE', category: 'MEMORY' },
-        { symbol: 'WDC', name: 'Western Digital (Flash)', price: 78.90, change: 2.85, changePercent: 3.75, lastUpdated: jstString, freshness: 'LIVE', category: 'MEMORY' },
-        { symbol: 'AMD', name: 'Advanced Micro Devices', price: 162.30, change: 3.45, changePercent: 2.17, lastUpdated: jstString, freshness: 'LIVE', category: 'CHIP' },
-        { symbol: 'AVGO', name: 'Broadcom Inc', price: 178.60, change: 4.20, changePercent: 2.41, lastUpdated: jstString, freshness: 'LIVE', category: 'CHIP' },
-        { symbol: '^SOX', name: 'Philadelphia Semiconductor Index', price: 5420.10, change: 102.30, changePercent: 1.92, lastUpdated: jstString, freshness: 'LIVE', category: 'INDEX' },
-        { symbol: '^IXIC', name: 'Nasdaq Composite', price: 18450.20, change: 215.40, changePercent: 1.18, lastUpdated: jstString, freshness: 'LIVE', category: 'INDEX' },
-        { symbol: '^GSPC', name: 'S&P 500', price: 5640.80, change: 42.10, changePercent: 0.75, lastUpdated: jstString, freshness: 'LIVE', category: 'INDEX' },
-        { symbol: 'USD/JPY', name: 'USD / JPY (ドル円)', price: 142.15, change: -0.18, changePercent: -0.12, lastUpdated: jstString, freshness: 'LIVE', category: 'FX' },
-        { symbol: 'US10Y', name: 'US 10-Year Treasury Yield', price: 3.84, change: -0.04, changePercent: -1.03, lastUpdated: jstString, freshness: 'LIVE', category: 'MACRO' },
+        { symbol: 'NVDA', name: 'NVIDIA Corp', price: 148.52, change: 4.61, changePercent: 3.21, afterHoursPrice: 149.10, afterHoursChangePercent: 0.39, lastUpdated: jstString, freshness: 'DEMO', category: 'CHIP' },
+        { symbol: 'MU', name: 'Micron Technology', price: 112.40, change: 5.23, changePercent: 4.88, afterHoursPrice: 112.85, afterHoursChangePercent: 0.40, lastUpdated: jstString, freshness: 'DEMO', category: 'MEMORY' },
+        { symbol: 'WDC', name: 'Western Digital (Flash)', price: 78.90, change: 2.85, changePercent: 3.75, lastUpdated: jstString, freshness: 'DEMO', category: 'MEMORY' },
+        { symbol: 'AMD', name: 'Advanced Micro Devices', price: 162.30, change: 3.45, changePercent: 2.17, lastUpdated: jstString, freshness: 'DEMO', category: 'CHIP' },
+        { symbol: 'AVGO', name: 'Broadcom Inc', price: 178.60, change: 4.20, changePercent: 2.41, lastUpdated: jstString, freshness: 'DEMO', category: 'CHIP' },
+        { symbol: '^SOX', name: 'Philadelphia Semiconductor Index', price: 5420.10, change: 102.30, changePercent: 1.92, lastUpdated: jstString, freshness: 'DEMO', category: 'INDEX' },
+        { symbol: '^IXIC', name: 'Nasdaq Composite', price: 18450.20, change: 215.40, changePercent: 1.18, lastUpdated: jstString, freshness: 'DEMO', category: 'INDEX' },
+        { symbol: '^GSPC', name: 'S&P 500', price: 5640.80, change: 42.10, changePercent: 0.75, lastUpdated: jstString, freshness: 'DEMO', category: 'INDEX' },
+        { symbol: 'USD/JPY', name: 'USD / JPY (ドル円)', price: 142.15, change: -0.18, changePercent: -0.12, lastUpdated: jstString, freshness: 'DEMO', category: 'FX' },
+        { symbol: 'US10Y', name: 'US 10-Year Treasury Yield', price: 3.84, change: -0.04, changePercent: -1.03, lastUpdated: jstString, freshness: 'DEMO', category: 'MACRO' },
       ];
     }
 

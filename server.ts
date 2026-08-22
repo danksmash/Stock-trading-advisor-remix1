@@ -149,7 +149,48 @@ function calculateEmpiricalNextDayStats(ptsChangePercent: number) {
   };
 }
 
-// Helper for precise JST Date/Time extraction
+// Tokyo Stock Exchange (JPX) 2026 Official Market Holidays (Cash Equity Market / 現物市場)
+const JPX_HOLIDAYS_2026 = new Set([
+  '2026-01-01', // 元日
+  '2026-01-02', // 取引所休業日
+  '2026-01-03', // 取引所休業日
+  '2026-01-12', // 成人の日
+  '2026-02-11', // 建国記念の日
+  '2026-02-23', // 天皇誕生日
+  '2026-03-20', // 春分の日
+  '2026-04-29', // 昭和の日
+  '2026-05-03', // 憲法記念日
+  '2026-05-04', // みどりの日
+  '2026-05-05', // こどもの日
+  '2026-05-06', // 振替休日
+  '2026-07-20', // 海の日
+  '2026-08-11', // 山の日
+  '2026-09-21', // 敬老の日
+  '2026-09-22', // 国民の休日
+  '2026-09-23', // 秋分の日
+  '2026-10-12', // スポーツの日
+  '2026-11-03', // 文化の日
+  '2026-11-23', // 勤労感謝の日
+  '2026-12-31', // 大晦日 取引所休業日
+]);
+
+// Shared Tokyo business day validator (Saturday, Sunday, and JPX holidays are closed)
+export function isTokyoBusinessDay(year: number, month: number, day: number, dayOfWeek?: number): boolean {
+  if (dayOfWeek !== undefined) {
+    if (dayOfWeek === 0 || dayOfWeek === 6) return false;
+  }
+  const dateKey = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  if (JPX_HOLIDAYS_2026.has(dateKey)) {
+    return false;
+  }
+  // Standard annual New Year / Year-End market holidays
+  if (month === 1 && (day === 1 || day === 2 || day === 3)) return false;
+  if (month === 12 && day === 31) return false;
+
+  return true;
+}
+
+// Helper for precise JST Date/Time extraction and Unified Market Session Evaluation
 function getJstTimeInfo(date = new Date()) {
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Tokyo',
@@ -180,15 +221,54 @@ function getJstTimeInfo(date = new Date()) {
 
   const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
   const jstDay = dayMap[weekdayStr] ?? 1;
+  const isWeekend = jstDay === 0 || jstDay === 6;
+  const isTodayBusinessDay = !isWeekend && isTokyoBusinessDay(year, month, day, jstDay);
   const isWeekday = jstDay >= 1 && jstDay <= 5;
   const timeInMins = hour * 60 + minute;
 
-  // PTS Night Session is active:
-  // Mon-Fri: 17:00 - 23:59 (1020 - 1439 mins)
-  // Tue-Sat: 00:00 - 06:00 (0 - 360 mins) -> Friday night session continues into Saturday morning
-  const isPtsActiveHours = 
-    (jstDay >= 1 && jstDay <= 5 && timeInMins >= 1020) ||
-    (jstDay >= 2 && jstDay <= 6 && timeInMins < 360);
+  // PTS Night Session Check (17:00 - 06:00 JST):
+  // 1. 17:00 - 23:59: Active if today is a Tokyo business day.
+  // 2. 00:00 - 05:59: Belongs to previous day's night session. Active if previous calendar day was a Tokyo business day.
+  // 3. 06:00 - 16:59: Session is closed.
+  let isPtsActiveHours = false;
+  if (timeInMins >= 1020) {
+    isPtsActiveHours = isTodayBusinessDay;
+  } else if (timeInMins < 360) {
+    const prevDate = new Date(date.getTime() - 24 * 60 * 60 * 1000);
+    const prevParts = formatter.formatToParts(prevDate);
+    const pp: Record<string, string> = {};
+    prevParts.forEach(({ type, value }) => { pp[type] = value; });
+    const prevYear = parseInt(pp.year || '2026', 10);
+    const prevMonth = parseInt(pp.month || '1', 10);
+    const prevDay = parseInt(pp.day || '1', 10);
+    const prevWeekday = dayMap[pp.weekday || 'Mon'] ?? 1;
+    const isPrevDayBusinessDay = prevWeekday !== 0 && prevWeekday !== 6 && isTokyoBusinessDay(prevYear, prevMonth, prevDay, prevWeekday);
+    isPtsActiveHours = isPrevDayBusinessDay;
+  } else {
+    isPtsActiveHours = false;
+  }
+
+  // Tokyo Regular Market Session (09:00 - 11:30, 12:30 - 15:30 JST on Tokyo Business Days)
+  const isTokyoMarketOpen =
+    isTodayBusinessDay &&
+    ((timeInMins >= 540 && timeInMins <= 690) || (timeInMins >= 750 && timeInMins <= 930));
+
+  const isTokyoPreMarket =
+    isTodayBusinessDay && (timeInMins >= 480 && timeInMins < 540);
+
+  // Determine Market Session Status
+  let marketSession: 'TOKYO MARKET OPEN' | 'TOKYO MARKET CLOSED' | 'PTS SESSION' | 'US MARKET OPEN' | 'US MARKET CLOSED' | 'PRE-MARKET' = 'TOKYO MARKET CLOSED';
+  if (isTokyoMarketOpen) {
+    marketSession = 'TOKYO MARKET OPEN';
+  } else if (isTokyoPreMarket) {
+    marketSession = 'PRE-MARKET';
+  } else if (isPtsActiveHours) {
+    marketSession = 'PTS SESSION';
+  } else if (isWeekday && (timeInMins >= 1350 || timeInMins < 300)) {
+    marketSession = 'US MARKET OPEN';
+  } else {
+    marketSession = 'TOKYO MARKET CLOSED';
+  }
 
   const jstTimeString = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')} JST`;
   const jstDateString = `${year}/${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}`;
@@ -201,9 +281,14 @@ function getJstTimeInfo(date = new Date()) {
     minute,
     second,
     jstDay,
+    isWeekend,
     isWeekday,
+    isTodayBusinessDay,
     timeInMins,
+    isMarketOpen: isTokyoMarketOpen,
+    isPreMarket: isTokyoPreMarket,
     isPtsActiveHours,
+    marketSession,
     jstTimeString,
     jstDateString,
   };
@@ -278,10 +363,17 @@ async function fetchYahooJapanPtsData(symbol: string, tokyoPrice: number, prevCl
       sourceRawSnippet = '[NO PTS ROW IN HTML: Market closed or no trades today]';
     }
 
-    // 3. VALIDATED PTS: Strict Anomaly & Bounds Validation
-    const benchmarkPrice = tokyoPrice > 0 ? tokyoPrice : (prevClose > 0 ? prevClose : 54000);
+    // 3. VALIDATED PTS: Strict Anomaly & Bounds Validation (No fabricated fallbacks)
+    let benchmarkPrice = 0;
+    if (tokyoPrice > 0) {
+      benchmarkPrice = tokyoPrice;
+    } else if (prevClose > 0) {
+      benchmarkPrice = prevClose;
+    } else {
+      benchmarkPrice = 0;
+    }
 
-    if (parsedPrice !== null && parsedPrice > 0 && isFinite(parsedPrice)) {
+    if (benchmarkPrice > 0 && parsedPrice !== null && parsedPrice > 0 && isFinite(parsedPrice)) {
       // Validate deviation from TSE price / prev close: should not deviate > 35%
       const deviationPercent = Math.abs((parsedPrice - benchmarkPrice) / benchmarkPrice) * 100;
       if (deviationPercent > 35.0) {
@@ -293,6 +385,9 @@ async function fetchYahooJapanPtsData(symbol: string, tokyoPrice: number, prevCl
         validationMessage = 'PTS価格・市場・時刻の完全検証に合格しました';
         validatedPrice = parsedPrice;
       }
+    } else if (benchmarkPrice <= 0) {
+      validationStatus = 'INVALID';
+      validationMessage = '基準価格（東証現物価格または前日終値）が取得できないためPTS価格を検証できません（安全のため非表示）';
     } else {
       validationStatus = 'EMPTY';
       validationMessage = 'PTS取引データまたは約定値がデータソースに存在しません';
@@ -676,26 +771,9 @@ app.get('/api/market/kioxia', async (req, res) => {
 
     const jst = getJstTimeInfo();
     const jstTimeString = `${jst.jstDateString} ${jst.jstTimeString}`;
-
-    // Market hours check (Tokyo: 09:00 - 11:30, 12:30 - 15:30)
-    const isMarketOpen =
-      jst.isWeekday &&
-      ((jst.timeInMins >= 540 && jst.timeInMins <= 690) || (jst.timeInMins >= 750 && jst.timeInMins <= 930));
-    const isPreMarket = jst.isWeekday && (jst.timeInMins >= 480 && jst.timeInMins < 540);
-
-    // Determine Market Session
-    let marketSession: 'TOKYO MARKET OPEN' | 'TOKYO MARKET CLOSED' | 'PTS SESSION' | 'US MARKET OPEN' | 'US MARKET CLOSED' | 'PRE-MARKET' = 'TOKYO MARKET CLOSED';
-    if (isMarketOpen) {
-      marketSession = 'TOKYO MARKET OPEN';
-    } else if (isPreMarket) {
-      marketSession = 'PRE-MARKET';
-    } else if (jst.isPtsActiveHours) {
-      marketSession = 'PTS SESSION';
-    } else if (jst.isWeekday && (jst.timeInMins >= 1350 || jst.timeInMins < 300)) { // 22:30 - 05:00 JST
-      marketSession = 'US MARKET OPEN';
-    } else {
-      marketSession = 'TOKYO MARKET CLOSED';
-    }
+    const isMarketOpen = jst.isMarketOpen;
+    const isPreMarket = jst.isPreMarket;
+    const marketSession = jst.marketSession;
 
     if (isRealData && chart5m && chartDaily) {
       const meta = chart5m.meta;
