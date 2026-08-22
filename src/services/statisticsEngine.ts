@@ -253,9 +253,50 @@ export function findSimilarScenarios(
   kioxia: KioxiaMarketData,
   usQuotes: UsSemiQuote[]
 ): SimilarScenarioResult {
-  const sox = usQuotes.find((q) => q.symbol === '^SOX')?.changePercent || 1.92;
-  const nvda = usQuotes.find((q) => q.symbol === 'NVDA')?.changePercent || 3.21;
+  const sox = usQuotes.find((q) => q.symbol === '^SOX')?.changePercent || 0;
+  const nvda = usQuotes.find((q) => q.symbol === 'NVDA')?.changePercent || 0;
   const vwapRel = kioxia.price >= kioxia.vwap ? 'ABOVE' : 'BELOW';
+
+  // Extract dynamic JST day and time
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Tokyo',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(now);
+  const p: Record<string, string> = {};
+  parts.forEach(({ type, value }) => { p[type] = value; });
+
+  const dayJapaneseMap: Record<string, string> = {
+    Mon: '月曜日 (MON)',
+    Tue: '火曜日 (TUE)',
+    Wed: '水曜日 (WED)',
+    Thu: '木曜日 (THU)',
+    Fri: '金曜日 (FRI)',
+    Sat: '土曜日 (SAT / 週末)',
+    Sun: '日曜日 (SUN / 週末)',
+  };
+  const currentDayLabel = dayJapaneseMap[p.weekday || ''] || '平日セッション';
+
+  let hour = parseInt(p.hour || '0', 10);
+  if (hour === 24) hour = 0;
+  const minute = parseInt(p.minute || '0', 10);
+  const timeInMins = hour * 60 + minute;
+
+  let currentTimeSlotLabel = '場外 / セッション待機';
+  if (timeInMins >= 540 && timeInMins < 570) currentTimeSlotLabel = '09:00〜09:30 (前場寄付)';
+  else if (timeInMins >= 570 && timeInMins < 600) currentTimeSlotLabel = '09:30〜10:00 (前場前半)';
+  else if (timeInMins >= 600 && timeInMins < 630) currentTimeSlotLabel = '10:00〜10:30 (前場半ば)';
+  else if (timeInMins >= 630 && timeInMins < 660) currentTimeSlotLabel = '10:30〜11:00 (前場後半)';
+  else if (timeInMins >= 660 && timeInMins < 690) currentTimeSlotLabel = '11:00〜11:30 (前場引け)';
+  else if (timeInMins >= 690 && timeInMins < 750) currentTimeSlotLabel = '11:30〜12:30 (昼休み)';
+  else if (timeInMins >= 750 && timeInMins < 810) currentTimeSlotLabel = '12:30〜13:30 (後場寄付)';
+  else if (timeInMins >= 810 && timeInMins < 870) currentTimeSlotLabel = '13:30〜14:30 (後場半ば)';
+  else if (timeInMins >= 870 && timeInMins <= 930) currentTimeSlotLabel = '14:30〜15:30 (大引け集中)';
+  else if (timeInMins >= 1020 || timeInMins < 360) currentTimeSlotLabel = '17:00〜06:00 (PTS夜間セッション)';
 
   // Condition matching against historical database
   const sampleCount = 38;
@@ -263,8 +304,8 @@ export function findSimilarScenarios(
 
   return {
     matchConditions: {
-      day: '木曜日 (THU)',
-      time: '09:30〜10:00',
+      day: currentDayLabel,
+      time: currentTimeSlotLabel,
       kioxiaGainPercent: kioxia.changePercent,
       vwapRelation: vwapRel,
       volumeSpikeRatio: kioxia.volumeRatioVs20d,

@@ -13,9 +13,55 @@ export const HeatmapMatrix: React.FC = () => {
   const days: ('MON' | 'TUE' | 'WED' | 'THU' | 'FRI')[] = ['MON', 'TUE', 'WED', 'THU', 'FRI'];
   const timeSlots = ['09:00', '09:30', '10:00', '10:30', '11:00', '12:30', '13:00', '14:00', '14:30', '15:00'];
 
-  // Current simulation slot: THU 10:00
-  const currentDay = 'THU';
-  const currentTimeSlot = '10:00';
+  // Dynamically calculate current JST day and time slot
+  const getDynamicSlot = () => {
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Tokyo',
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(now);
+    const p: Record<string, string> = {};
+    parts.forEach(({ type, value }) => { p[type] = value; });
+
+    const weekdayMap: Record<string, 'MON' | 'TUE' | 'WED' | 'THU' | 'FRI'> = {
+      Mon: 'MON',
+      Tue: 'TUE',
+      Wed: 'WED',
+      Thu: 'THU',
+      Fri: 'FRI',
+    };
+    const jstDay = weekdayMap[p.weekday || ''] || null;
+    let hour = parseInt(p.hour || '0', 10);
+    if (hour === 24) hour = 0;
+    const minute = parseInt(p.minute || '0', 10);
+    const timeInMins = hour * 60 + minute;
+
+    // Find closest time slot in Tokyo session
+    let matchedSlot: string | null = null;
+    if (timeInMins >= 540 && timeInMins <= 569) matchedSlot = '09:00';
+    else if (timeInMins >= 570 && timeInMins <= 599) matchedSlot = '09:30';
+    else if (timeInMins >= 600 && timeInMins <= 629) matchedSlot = '10:00';
+    else if (timeInMins >= 630 && timeInMins <= 659) matchedSlot = '10:30';
+    else if (timeInMins >= 660 && timeInMins <= 719) matchedSlot = '11:00';
+    else if (timeInMins >= 720 && timeInMins <= 779) matchedSlot = '12:30';
+    else if (timeInMins >= 780 && timeInMins <= 839) matchedSlot = '13:00';
+    else if (timeInMins >= 840 && timeInMins <= 869) matchedSlot = '14:00';
+    else if (timeInMins >= 870 && timeInMins <= 899) matchedSlot = '14:30';
+    else if (timeInMins >= 900 && timeInMins <= 930) matchedSlot = '15:00';
+
+    return { jstDay, matchedSlot, hour, minute };
+  };
+
+  const dynamicSlot = getDynamicSlot();
+  const currentDay = dynamicSlot.jstDay;
+  const currentTimeSlot = dynamicSlot.matchedSlot;
+  const currentCell = currentDay && currentTimeSlot 
+    ? heatmapCells.find((c) => c.day === currentDay && c.timeSlot === currentTimeSlot)
+    : null;
 
   const getCellBg = (val: number) => {
     if (val >= 2.0) return 'bg-emerald-500 text-black font-black';
@@ -117,7 +163,19 @@ export const HeatmapMatrix: React.FC = () => {
             <div className="flex items-center gap-1.5 text-yellow-400 font-medium">
               <Clock className="w-3.5 h-3.5" />
               <span>
-                現在時間帯 [木曜 10:00]: 過去データ平均 <strong className="text-emerald-400">+1.2%</strong> / 勝率 <strong>68%</strong> の優位性局面
+                {currentCell ? (
+                  <>
+                    現在時間帯 [{currentDay} {currentTimeSlot}]: 過去データ平均{' '}
+                    <strong className={currentCell.avgReturnToClose >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                      {currentCell.avgReturnToClose >= 0 ? `+${currentCell.avgReturnToClose.toFixed(1)}%` : `${currentCell.avgReturnToClose.toFixed(1)}%`}
+                    </strong>{' '}
+                    / 勝率 <strong>{currentCell.winRate}%</strong> (サンプル {currentCell.sampleCount}件)
+                  </>
+                ) : (
+                  <>
+                    東京市場セッション外 (JST): 統計ヒートマップから各時間帯をクリックして詳細を確認できます
+                  </>
+                )}
               </span>
             </div>
 

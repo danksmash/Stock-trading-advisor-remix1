@@ -149,27 +149,75 @@ function calculateEmpiricalNextDayStats(ptsChangePercent: number) {
   };
 }
 
+// Helper for precise JST Date/Time extraction
+function getJstTimeInfo(date = new Date()) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    weekday: 'short',
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(date);
+  const p: Record<string, string> = {};
+  parts.forEach(({ type, value }) => {
+    p[type] = value;
+  });
+
+  const year = parseInt(p.year || '2026', 10);
+  const month = parseInt(p.month || '1', 10);
+  const day = parseInt(p.day || '1', 10);
+  let hour = parseInt(p.hour || '0', 10);
+  if (hour === 24) hour = 0; // standard 24h wrap
+  const minute = parseInt(p.minute || '0', 10);
+  const second = parseInt(p.second || '0', 10);
+  const weekdayStr = p.weekday || 'Mon';
+
+  const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const jstDay = dayMap[weekdayStr] ?? 1;
+  const isWeekday = jstDay >= 1 && jstDay <= 5;
+  const timeInMins = hour * 60 + minute;
+
+  // PTS Night Session is active:
+  // Mon-Fri: 17:00 - 23:59 (1020 - 1439 mins)
+  // Tue-Sat: 00:00 - 06:00 (0 - 360 mins) -> Friday night session continues into Saturday morning
+  const isPtsActiveHours = 
+    (jstDay >= 1 && jstDay <= 5 && timeInMins >= 1020) ||
+    (jstDay >= 2 && jstDay <= 6 && timeInMins < 360);
+
+  const jstTimeString = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')} JST`;
+  const jstDateString = `${year}/${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}`;
+
+  return {
+    year,
+    month,
+    day,
+    hour,
+    minute,
+    second,
+    jstDay,
+    isWeekday,
+    timeInMins,
+    isPtsActiveHours,
+    jstTimeString,
+    jstDateString,
+  };
+}
+
 // Automated PTS Fetcher from Yahoo! Finance Japan (J-Market) with Full Diagnostic Pipeline
 async function fetchYahooJapanPtsData(symbol: string, tokyoPrice: number, prevClose: number) {
   const cacheKey = `pts_data_${symbol}`;
   const cached = getCached<any>(cacheKey, PTS_CACHE_TTL);
   
   const now = new Date();
-  const jstHour = (now.getUTCHours() + 9) % 24;
-  const jstMin = now.getUTCMinutes();
-  const jstDay = (now.getUTCDay() + (now.getUTCHours() + 9 >= 24 ? 1 : 0)) % 7;
-  const isWeekday = jstDay >= 1 && jstDay <= 5;
-  const timeInMins = jstHour * 60 + jstMin;
-
-  // PTS Session: 17:00 (1020 mins) - 06:00 (360 mins)
-  const isPtsActiveHours = isWeekday && (timeInMins >= 1020 || timeInMins < 360);
-
-  const jstTimeString = now.toLocaleTimeString('ja-JP', {
-    timeZone: 'Asia/Tokyo',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }) + ' JST';
+  const jst = getJstTimeInfo(now);
+  const isPtsActiveHours = jst.isPtsActiveHours;
+  const jstTimeString = jst.jstTimeString;
 
   if (cached) {
     const cacheAgeSeconds = Math.floor((Date.now() - (cached.cachedAt || Date.now())) / 1000);
@@ -626,27 +674,14 @@ app.get('/api/market/kioxia', async (req, res) => {
       isRealData = false;
     }
 
-    const now = new Date();
-    const jstTimeString = now.toLocaleString('ja-JP', {
-      timeZone: 'Asia/Tokyo',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    }) + ' JST';
+    const jst = getJstTimeInfo();
+    const jstTimeString = `${jst.jstDateString} ${jst.jstTimeString}`;
 
     // Market hours check (Tokyo: 09:00 - 11:30, 12:30 - 15:30)
-    const jstHour = (now.getUTCHours() + 9) % 24;
-    const jstMin = now.getUTCMinutes();
-    const jstDay = (now.getUTCDay() + (now.getUTCHours() + 9 >= 24 ? 1 : 0)) % 7;
-    const isWeekday = jstDay >= 1 && jstDay <= 5;
-    const timeInMins = jstHour * 60 + jstMin;
     const isMarketOpen =
-      isWeekday &&
-      ((timeInMins >= 540 && timeInMins <= 690) || (timeInMins >= 750 && timeInMins <= 930));
-    const isPreMarket = isWeekday && (timeInMins >= 480 && timeInMins < 540);
+      jst.isWeekday &&
+      ((jst.timeInMins >= 540 && jst.timeInMins <= 690) || (jst.timeInMins >= 750 && jst.timeInMins <= 930));
+    const isPreMarket = jst.isWeekday && (jst.timeInMins >= 480 && jst.timeInMins < 540);
 
     // Determine Market Session
     let marketSession: 'TOKYO MARKET OPEN' | 'TOKYO MARKET CLOSED' | 'PTS SESSION' | 'US MARKET OPEN' | 'US MARKET CLOSED' | 'PRE-MARKET' = 'TOKYO MARKET CLOSED';
@@ -654,9 +689,9 @@ app.get('/api/market/kioxia', async (req, res) => {
       marketSession = 'TOKYO MARKET OPEN';
     } else if (isPreMarket) {
       marketSession = 'PRE-MARKET';
-    } else if (isWeekday && timeInMins >= 930 && timeInMins < 1350) { // 15:30 - 22:30 JST
+    } else if (jst.isPtsActiveHours) {
       marketSession = 'PTS SESSION';
-    } else if (isWeekday && (timeInMins >= 1350 || timeInMins < 300)) { // 22:30 - 05:00 JST
+    } else if (jst.isWeekday && (jst.timeInMins >= 1350 || jst.timeInMins < 300)) { // 22:30 - 05:00 JST
       marketSession = 'US MARKET OPEN';
     } else {
       marketSession = 'TOKYO MARKET CLOSED';
@@ -711,7 +746,7 @@ app.get('/api/market/kioxia', async (req, res) => {
         const pd = new Date(prevDayTs);
         prevCloseDate = pd.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit' });
       } else {
-        const pd = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const pd = new Date(Date.now() - 24 * 60 * 60 * 1000);
         prevCloseDate = pd.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit' });
       }
 
@@ -873,13 +908,8 @@ app.get('/api/market/us-quotes', async (req, res) => {
       { sym: '^TNX', name: 'US 10-Year Treasury Yield', category: 'MACRO' },
     ];
 
-    const now = new Date();
-    const jstTimeString = now.toLocaleString('ja-JP', {
-      timeZone: 'Asia/Tokyo',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    }) + ' JST';
+    const jst = getJstTimeInfo();
+    const jstTimeString = `${jst.jstDateString} ${jst.jstTimeString}`;
 
     const quotes = await Promise.all(
       symbols.map(async ({ sym, name, category }) => {
@@ -903,10 +933,10 @@ app.get('/api/market/us-quotes', async (req, res) => {
             freshness: 'LIVE',
             category,
             details: sym === 'NVDA' ? {
-              nextEarningsDate: '2026/08/27 (予想)',
-              revenueConsensus: '$38.2B (+54% YoY)',
-              epsConsensus: '$0.84 (+58% YoY)',
-              source: 'Consensus Market Feeds',
+              nextEarningsDate: '情報取得不可（外部API未接続）',
+              revenueConsensus: '情報取得不可',
+              epsConsensus: '情報取得不可',
+              source: 'Yahoo! Finance (Market Feeds)',
               updatedAt: jstTimeString,
             } : undefined,
           };
@@ -945,7 +975,7 @@ app.get('/api/market/pts/history', (req, res) => {
   });
 });
 
-// API: Semiconductor and Kioxia News Feed
+// API: Semiconductor and Kioxia News Feed (Curated Industry Context)
 app.get('/api/market/news', async (req, res) => {
   try {
     const cached = getCached('market_news_data', 60000); // 1 min cache
@@ -958,8 +988,8 @@ app.get('/api/market/news', async (req, res) => {
         id: 'news-1',
         title: 'ハイパースケーラーのAIデータセンター拡張に伴いEnterprise SSD需要が急加速',
         summary: '大手クラウド事業者各社がAIクラスタストレージの増設を前倒し。QLC/TLC NANDフラッシュのスポット価格・大口契約価格ともに上昇傾向。',
-        source: 'Reuters / 半導体速報',
-        publishedAt: '2026/08/21 08:15 JST',
+        source: '業界レポート（参考アーカイブ）',
+        publishedAt: '参考情報',
         sentiment: 'POSITIVE',
         importance: 'HIGH',
         kioxiaImpact: '主力エンタープライズSSD（BiCS FLASH™）の出荷増とマージン改善に直結。',
@@ -969,8 +999,8 @@ app.get('/api/market/news', async (req, res) => {
         id: 'news-2',
         title: 'NANDフラッシュ在庫調整が完了、メモリメーカー各社の稼働率が引き上げ局面へ',
         summary: '業界全体の在庫水準が適正化し、下半期の価格交渉力はサプライヤー側に有利にシフト。四半期売上高コンセンサスの上方修正が相次ぐ。',
-        source: 'Nikkei Semiconductor Review',
-        publishedAt: '2026/08/21 07:30 JST',
+        source: '業界レポート（参考アーカイブ）',
+        publishedAt: '参考情報',
         sentiment: 'POSITIVE',
         importance: 'HIGH',
         kioxiaImpact: '四日市・北上工場の稼働率改善と原価低減効果が業績寄与へ。',
@@ -980,8 +1010,8 @@ app.get('/api/market/news', async (req, res) => {
         id: 'news-3',
         title: 'NVIDIA Blackwell次世代プラットフォームでのストレージ要件が倍増、高密度SSDが必須に',
         summary: '次世代GPUクラスタのチェックポイント保存およびデータインジェスション要件により、大容量PCIe Gen5 SSDの需要が拡大。',
-        source: 'TrendForce Storage Report',
-        publishedAt: '2026/08/20 21:40 JST',
+        source: '業界レポート（参考アーカイブ）',
+        publishedAt: '参考情報',
         sentiment: 'POSITIVE',
         importance: 'MEDIUM',
         kioxiaImpact: 'PCIe 5.0対応エンタープライズSSD市場でのシェア拡大機会。',
@@ -991,8 +1021,8 @@ app.get('/api/market/news', async (req, res) => {
         id: 'news-4',
         title: '為替ドル円が142円台前半で推移、円高振れによる短期的な輸出採算への影響を注視',
         summary: '日米金利差縮小観測からドル円が小幅軟化。輸出比率の高い半導体セクターにおける為替感応度が意識される展開。',
-        source: 'Bloomberg Markets',
-        publishedAt: '2026/08/21 08:45 JST',
+        source: '為替概況（参考アーカイブ）',
+        publishedAt: '参考情報',
         sentiment: 'NEUTRAL',
         importance: 'LOW',
         kioxiaImpact: 'ドル建て売上比率が高いため為替影響は中立〜軽微なマイナス要因。',

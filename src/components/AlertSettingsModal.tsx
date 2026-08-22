@@ -10,7 +10,7 @@ interface AlertSettingsModalProps {
 
 const DEFAULT_ALERTS: AlertRule[] = [
   { id: '1', type: 'SCORE_ABOVE', threshold: 75, enabled: true, label: '総合シグナルスコアが75点以上 (BUY成立)' },
-  { id: '2', type: 'PRICE_BELOW', threshold: 5350, enabled: true, label: 'キオクシア株価が 5,350円 以下 (第1買い候補圏)' },
+  { id: '2', type: 'PRICE_BELOW', threshold: 5350, enabled: true, label: 'キオクシア株価が 5,350円 以下 (買い検討水準)' },
   { id: '3', type: 'VOLUME_SPIKE', threshold: 100, enabled: true, label: '出来高が20日平均比 +100% 以上' },
   { id: '4', type: 'NVDA_SPIKE', threshold: 3.0, enabled: true, label: 'NVIDIAが +3.0% 以上急伸' },
 ];

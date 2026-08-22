@@ -34,7 +34,9 @@ export const UsSemiMarket: React.FC<UsSemiMarketProps> = ({ quotes }) => {
             米国半導体 & マクロ市況（リアルタイム連動）
           </h2>
         </div>
-        <span className="text-[9px] text-gray-500 font-mono">米市場 20:00 JST 翌05:00 JST</span>
+        <span className="text-[9px] text-gray-500 font-mono">
+          {quotes[0]?.lastUpdated ? `更新: ${quotes[0].lastUpdated}` : '米国株式・為替 (EDT/EST)'}
+        </span>
       </div>
 
       {/* Primary Semiconductor Focus: NVIDIA Card */}
@@ -53,13 +55,13 @@ export const UsSemiMarket: React.FC<UsSemiMarketProps> = ({ quotes }) => {
           <div className="flex items-baseline justify-between mt-1.5">
             <div>
               <span className="text-xl font-black font-mono text-white">${nvda.price.toFixed(2)}</span>
-              <span className="text-xs font-bold font-mono text-emerald-400 ml-1.5">
-                +{nvda.change.toFixed(2)} (+{nvda.changePercent.toFixed(2)}%)
+              <span className={`text-xs font-bold font-mono ml-1.5 ${nvda.change >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {nvda.change >= 0 ? `+${nvda.change.toFixed(2)}` : nvda.change.toFixed(2)} ({nvda.changePercent >= 0 ? `+${nvda.changePercent.toFixed(2)}` : nvda.changePercent.toFixed(2)}%)
               </span>
             </div>
             {nvda.afterHoursPrice && (
               <div className="text-right text-[10px] font-mono text-gray-400">
-                時間外: <strong className="text-emerald-400">${nvda.afterHoursPrice} (+{nvda.afterHoursChangePercent}%)</strong>
+                時間外: <strong className={nvda.afterHoursChangePercent && nvda.afterHoursChangePercent >= 0 ? 'text-emerald-400' : 'text-rose-400'}>${nvda.afterHoursPrice} ({nvda.afterHoursChangePercent && nvda.afterHoursChangePercent >= 0 ? `+${nvda.afterHoursChangePercent}` : nvda.afterHoursChangePercent}%)</strong>
               </div>
             )}
           </div>

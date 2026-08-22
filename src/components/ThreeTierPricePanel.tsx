@@ -50,7 +50,7 @@ export const ThreeTierPricePanel: React.FC<ThreeTierPricePanelProps> = ({
 
   const prevClose = kioxia.prevCloseInfo || {
     price: kioxia.prevClose || 0,
-    date: '2026/08/20',
+    date: '前営業日',
     benchmarkDescription: '前日比計算の基準価格（前営業日の東証公式終値）',
     source: '東京証券取引所 公式終値 (TSE Official Close)',
   };
