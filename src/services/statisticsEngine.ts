@@ -5,15 +5,6 @@ import {
   BacktestResult,
   KioxiaMarketData,
   UsSemiQuote,
-} from '../types';
-
-import {
-  DayTimeCell,
-  DayStats,
-  SimilarScenarioResult,
-  BacktestResult,
-  KioxiaMarketData,
-  UsSemiQuote,
   RealPtsRecord,
   PtsBinBacktest,
   SignalComparisonSummary,
