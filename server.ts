@@ -190,6 +190,36 @@ export function isTokyoBusinessDay(year: number, month: number, day: number, day
   return true;
 }
 
+// Helper to determine if US regular market is open (09:30 - 16:00 America/New_York on Mon-Fri)
+export function isUsMarketOpen(date = new Date()): boolean {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(date);
+  const p: Record<string, string> = {};
+  parts.forEach(({ type, value }) => {
+    p[type] = value;
+  });
+
+  const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const nyDay = dayMap[p.weekday || 'Mon'] ?? 1;
+  const isNyWeekday = nyDay >= 1 && nyDay <= 5;
+  if (!isNyWeekday) return false;
+
+  let hour = parseInt(p.hour || '0', 10);
+  if (hour === 24) hour = 0;
+  const minute = parseInt(p.minute || '0', 10);
+  const timeInMins = hour * 60 + minute;
+
+  // Regular US Trading Session: 09:30 <= time < 16:00 (570 <= timeInMins < 960)
+  return timeInMins >= 570 && timeInMins < 960;
+}
+
 // Helper for precise JST Date/Time extraction and Unified Market Session Evaluation
 function getJstTimeInfo(date = new Date()) {
   const formatter = new Intl.DateTimeFormat('en-US', {
@@ -256,6 +286,8 @@ function getJstTimeInfo(date = new Date()) {
   const isTokyoPreMarket =
     isTodayBusinessDay && (timeInMins >= 480 && timeInMins < 540);
 
+  const isUsMarket = isUsMarketOpen(date);
+
   // Determine Market Session Status
   let marketSession: 'TOKYO MARKET OPEN' | 'TOKYO MARKET CLOSED' | 'PTS SESSION' | 'US MARKET OPEN' | 'US MARKET CLOSED' | 'PRE-MARKET' = 'TOKYO MARKET CLOSED';
   if (isTokyoMarketOpen) {
@@ -264,7 +296,7 @@ function getJstTimeInfo(date = new Date()) {
     marketSession = 'PRE-MARKET';
   } else if (isPtsActiveHours) {
     marketSession = 'PTS SESSION';
-  } else if (isWeekday && (timeInMins >= 1350 || timeInMins < 300)) {
+  } else if (isUsMarket) {
     marketSession = 'US MARKET OPEN';
   } else {
     marketSession = 'TOKYO MARKET CLOSED';
@@ -886,6 +918,7 @@ app.get('/api/market/kioxia', async (req, res) => {
         lastUpdated: jstTimeString,
         isMarketOpen,
         isPreMarket,
+        isTodayBusinessDay: jst.isTodayBusinessDay,
         marketSession,
         prevCloseInfo,
         tokyoMarketInfo,
@@ -948,6 +981,7 @@ app.get('/api/market/kioxia', async (req, res) => {
         lastUpdated: jstTimeString,
         isMarketOpen: false,
         isPreMarket: false,
+        isTodayBusinessDay: jst.isTodayBusinessDay,
         marketSession,
         prevCloseInfo,
         tokyoMarketInfo,

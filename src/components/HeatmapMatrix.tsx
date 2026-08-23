@@ -1,11 +1,46 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { getDayTimeHeatmap, getDayStats } from '../services/statisticsEngine';
 import { DayTimeCell, DayStats } from '../types';
 import { Calendar, Clock, BarChart3, HelpCircle } from 'lucide-react';
 
-export const HeatmapMatrix: React.FC = () => {
+export interface HeatmapMatrixProps {
+  isMarketOpen?: boolean;
+  isTodayBusinessDay?: boolean;
+}
+
+export const HeatmapMatrix: React.FC<HeatmapMatrixProps> = ({
+  isMarketOpen: propIsMarketOpen,
+  isTodayBusinessDay: propIsTodayBusinessDay,
+}) => {
   const [activeTab, setActiveTab] = useState<'heatmap' | 'dayStats'>('heatmap');
   const [selectedCell, setSelectedCell] = useState<DayTimeCell | null>(null);
+  const [marketStatus, setMarketStatus] = useState<{
+    isMarketOpen?: boolean;
+    isTodayBusinessDay?: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetch('/api/market/kioxia')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (isMounted && data) {
+          setMarketStatus({
+            isMarketOpen: typeof data.isMarketOpen === 'boolean' ? data.isMarketOpen : undefined,
+            isTodayBusinessDay: typeof data.isTodayBusinessDay === 'boolean' ? data.isTodayBusinessDay : undefined,
+          });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const effectiveIsMarketOpen =
+    propIsMarketOpen !== undefined ? propIsMarketOpen : marketStatus?.isMarketOpen;
+  const effectiveIsTodayBusinessDay =
+    propIsTodayBusinessDay !== undefined ? propIsTodayBusinessDay : marketStatus?.isTodayBusinessDay;
 
   const heatmapCells = getDayTimeHeatmap();
   const dayStats = getDayStats();
@@ -15,6 +50,11 @@ export const HeatmapMatrix: React.FC = () => {
 
   // Dynamically calculate current JST day and time slot
   const getDynamicSlot = () => {
+    // If market is closed or today is not a business day (weekend or JPX holiday)
+    if (effectiveIsMarketOpen === false || effectiveIsTodayBusinessDay === false) {
+      return { jstDay: null, matchedSlot: null, hour: 0, minute: 0 };
+    }
+
     const now = new Date();
     const formatter = new Intl.DateTimeFormat('en-US', {
       timeZone: 'Asia/Tokyo',
@@ -35,6 +75,10 @@ export const HeatmapMatrix: React.FC = () => {
       Fri: 'FRI',
     };
     const jstDay = weekdayMap[p.weekday || ''] || null;
+    if (!jstDay) {
+      return { jstDay: null, matchedSlot: null, hour: 0, minute: 0 };
+    }
+
     let hour = parseInt(p.hour || '0', 10);
     if (hour === 24) hour = 0;
     const minute = parseInt(p.minute || '0', 10);
@@ -53,7 +97,7 @@ export const HeatmapMatrix: React.FC = () => {
     else if (timeInMins >= 870 && timeInMins <= 899) matchedSlot = '14:30';
     else if (timeInMins >= 900 && timeInMins <= 930) matchedSlot = '15:00';
 
-    return { jstDay, matchedSlot, hour, minute };
+    return { jstDay: matchedSlot ? jstDay : null, matchedSlot, hour, minute };
   };
 
   const dynamicSlot = getDynamicSlot();
