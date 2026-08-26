@@ -45,6 +45,13 @@ const isSimilarTitle = (a: string, b: string) => {
   return union > 0 && intersection / union >= 0.56;
 };
 
+const isLowQuality = (item: { source: string; rawTitle: string }) => {
+  if (/^Mshale$/i.test(item.source)) return true;
+  if (/\([A-Za-z0-9_-]{8,}\)\s*$/.test(item.rawTitle)) return true;
+  if (/Bbc Radio 4|Dj Shockley/i.test(item.rawTitle)) return true;
+  return false;
+};
+
 function relevanceScore(title: string) {
   let score = 0;
   if (/キオクシア|Kioxia|285A/i.test(title)) score += 100;
@@ -85,7 +92,7 @@ export default async function handler(req: Request, res: Response) {
       const rawTitle = stripSourceSuffix(item.title);
       const published = item.pubDate ? Date.parse(item.pubDate) : NaN;
       return { ...item, rawTitle, published, relevance: relevanceScore(rawTitle) };
-    }).filter((item) => item.rawTitle && hasJapanese(item.rawTitle) && item.relevance >= 20 && (!Number.isFinite(item.published) || now - item.published <= maxAgeMs))
+    }).filter((item) => item.rawTitle && hasJapanese(item.rawTitle) && !isLowQuality(item) && item.relevance >= 20 && (!Number.isFinite(item.published) || now - item.published <= maxAgeMs))
       .sort((a, b) => b.relevance - a.relevance || (Number.isFinite(b.published) ? b.published : 0) - (Number.isFinite(a.published) ? a.published : 0));
 
     const selected: typeof candidates = [];
@@ -108,6 +115,7 @@ export default async function handler(req: Request, res: Response) {
     res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=900');
     res.setHeader('X-News-Source', 'google-news-ja-rss');
     res.setHeader('X-News-Dedup', 'semantic-bigram-v1');
+    res.setHeader('X-News-Quality', 'filtered-v1');
     return res.status(200).json(news);
   } catch (error) {
     console.error('[Japanese industry news] failed:', error instanceof Error ? error.message : String(error));
