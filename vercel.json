@@ -9,12 +9,12 @@
   },
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api"
+      "source": "/api/:path*",
+      "destination": "/api?path=:path*"
     },
     {
       "source": "/healthz",
-      "destination": "/api"
+      "destination": "/api?path=healthz"
     }
   ]
 }
