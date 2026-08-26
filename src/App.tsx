@@ -4,8 +4,6 @@ import { ThreeTierPricePanel } from './components/ThreeTierPricePanel';
 import { SignalScoreCard } from './components/SignalScoreCard';
 import { PriceKeyMetrics } from './components/PriceKeyMetrics';
 import { CandleChart } from './components/CandleChart';
-import { HeatmapMatrix } from './components/HeatmapMatrix';
-import { SimilarScenarioCard } from './components/SimilarScenarioCard';
 import { AiCommentCard } from './components/AiCommentCard';
 import { UsSemiMarket } from './components/UsSemiMarket';
 import { NewsFeed } from './components/NewsFeed';
@@ -28,7 +26,6 @@ import {
   assessChasingRisk,
   assessRapidDrop,
 } from './services/analysisEngine';
-import { findSimilarScenarios } from './services/statisticsEngine';
 import {
   KioxiaMarketData,
   UsSemiQuote,
@@ -165,7 +162,6 @@ export default function App() {
   const buyCandidates = calculateBuyCandidates(kioxia);
   const chasingRisk = assessChasingRisk(kioxia);
   const dropAssessment = assessRapidDrop(kioxia, usQuotes, news);
-  const similarScenario = findSimilarScenarios(kioxia, usQuotes);
 
   return (
     <div className="min-h-screen w-full bg-[#0B0E11] text-gray-200 font-sans flex flex-col antialiased selection:bg-blue-600 selection:text-white">
@@ -235,11 +231,6 @@ export default function App() {
               currentVwap={kioxia.vwap}
             />
 
-            {/* Day x Time Matrix & Day Statistics */}
-            <HeatmapMatrix />
-
-            {/* Similar Pattern Outcomes (+30m, +60m, +120m, EOD) */}
-            <SimilarScenarioCard scenario={similarScenario} />
           </div>
 
           {/* Right Column (3 Cols): US Semiconductor, NVDA, Memory News */}
@@ -288,4 +279,3 @@ export default function App() {
     </div>
   );
 }
-

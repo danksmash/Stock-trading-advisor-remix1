@@ -217,6 +217,7 @@ export interface NewsItem {
   importance: 'HIGH' | 'MEDIUM' | 'LOW';
   kioxiaImpact: string;
   tags: string[];
+  url?: string;
 }
 
 export interface ScoreBreakdown {

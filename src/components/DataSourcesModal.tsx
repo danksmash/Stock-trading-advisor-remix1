@@ -16,10 +16,10 @@ export const DataSourcesModal: React.FC<DataSourcesModalProps> = ({
 
   const sources = [
     {
-      name: '1. 前日終値 (東京証券取引所 公式確定値)',
-      provider: 'Yahoo! Finance / 東京証券取引所 (285A.T 前営業日終値)',
+      name: '1. 前日終値',
+      provider: 'Yahoo! Finance chart API (285A.T)',
       delay: '前営業日 15:30 確定値',
-      status: isLiveMode ? '🟢 ONLINE (公式基準価格)' : '🟡 DEMO MODE',
+      status: isLiveMode ? '🟡 ONLINE（遅延可能性あり）' : '🟡 DEMO MODE',
       updateInterval: '営業日毎に1回確定',
     },
     {
@@ -37,7 +37,7 @@ export const DataSourcesModal: React.FC<DataSourcesModalProps> = ({
       updateInterval: 'セッション中 約15秒更新',
     },
     {
-      name: '4. 米国半導体株 (NVDA / MU / WDC / AMD / AVGO)',
+      name: '4. 米国半導体株 (NVDA / MU / SNDK / AMD / AVGO)',
       provider: 'Yahoo! Finance US (v8 Chart API)',
       delay: '米国市場取引時間中リアルタイム / 市場終了値',
       status: isLiveMode ? '🟢 ONLINE' : '🟡 DEMO MODE',

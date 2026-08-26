@@ -396,7 +396,14 @@ export function runBacktest(
 
   const maxDrawdown = Number(maxDD.toFixed(2));
   const expectedValue = avgReturn;
-  const sharpeRatio = sampleCount > 1 ? 1.42 : 0.0;
+  const mean = sampleCount > 0 ? pnlList.reduce((sum, value) => sum + value, 0) / sampleCount : 0;
+  const variance = sampleCount > 1
+    ? pnlList.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / (sampleCount - 1)
+    : 0;
+  const standardDeviation = Math.sqrt(variance);
+  const sharpeRatio = standardDeviation > 0
+    ? Number(((mean / standardDeviation) * Math.sqrt(sampleCount)).toFixed(2))
+    : 0;
 
   const confidenceStatus = sampleCount < 10 ? 'INSUFFICIENT SAMPLE' : sampleCount < 30 ? 'LOW CONFIDENCE' : 'STATISTICALLY USABLE';
 

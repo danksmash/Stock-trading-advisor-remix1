@@ -79,7 +79,9 @@ export function calculateScoreBreakdown(
   const sox = usQuotes.find((q) => q.symbol === '^SOX');
   const nvda = usQuotes.find((q) => q.symbol === 'NVDA');
   const mu = usQuotes.find((q) => q.symbol === 'MU');
-  const wdc = usQuotes.find((q) => q.symbol === 'WDC');
+  const sndk = usQuotes.find((q) => q.symbol === 'SNDK');
+  const amd = usQuotes.find((q) => q.symbol === 'AMD');
+  const avgo = usQuotes.find((q) => q.symbol === 'AVGO');
 
   // SOX Index (Max 10)
   if (sox) {
@@ -107,45 +109,43 @@ export function calculateScoreBreakdown(
     }
   }
 
-  // Micron / SanDisk / WDC (Max 7)
-  const memAvg = ((mu?.changePercent || 0) + (wdc?.changePercent || 0)) / 2;
-  if (memAvg >= 2.0) {
+  // Broad US semiconductor breadth, independent from memory peers (Max 7)
+  const chipBreadth = ((amd?.changePercent || 0) + (avgo?.changePercent || 0)) / 2;
+  if (chipBreadth >= 2.0) {
     usScore += 7;
-    usNotes.push(`Micron(+${mu?.changePercent || 0}%), WDC/SanDisk(+${wdc?.changePercent || 0}%) と同業フラッシュメモリ銘柄が急伸 (+7点)`);
-  } else if (memAvg > 0) {
+    usNotes.push(`AMD・Broadcomの平均騰落率が+${chipBreadth.toFixed(2)}%とセクター全体が強い (+7点)`);
+  } else if (chipBreadth > 0) {
     usScore += 4;
-    usNotes.push(`米国メモリ銘柄が平均+${memAvg.toFixed(2)}%と堅調 (+4点)`);
+    usNotes.push(`米国半導体主要銘柄が平均+${chipBreadth.toFixed(2)}%と堅調 (+4点)`);
   } else {
-    usNotes.push(`米国メモリ銘柄が上値重い (0点)`);
+    usNotes.push(`米国半導体主要銘柄の広がりは弱い (0点)`);
   }
 
-  // 3. AI & Memory Market (Max 15)
+  // 3. Memory peers (Max 15): market prices only; news is scored separately.
   let aiScore = 0;
   const aiNotes: string[] = [];
-
-  const nandPositive = news.some((n) => n.tags.includes('NAND') && n.sentiment === 'POSITIVE');
-  const ssdPositive = news.some((n) => n.tags.includes('Enterprise SSD') && n.sentiment === 'POSITIVE');
-
-  if (nandPositive && ssdPositive) {
-    aiScore += 12;
-    aiNotes.push(`Enterprise SSD需要急増 & NANDスポット価格反発の強い追い風 (+12点)`);
-  } else if (nandPositive || ssdPositive) {
-    aiScore += 8;
-    aiNotes.push(`NAND/SSD市況回復基調 (+8点)`);
+  const availableMemoryPeers = [mu, sndk].filter(Boolean) as UsSemiQuote[];
+  const memoryAverage = availableMemoryPeers.length
+    ? availableMemoryPeers.reduce((sum, q) => sum + q.changePercent, 0) / availableMemoryPeers.length
+    : 0;
+  if (availableMemoryPeers.length < 2) {
+    aiNotes.push('MicronまたはSandiskのデータ不足（加点なし）');
+  } else if (memoryAverage >= 2) {
+    aiScore = 15;
+    aiNotes.push(`Micron・Sandisk平均+${memoryAverage.toFixed(2)}%でメモリ同業が強い (+15点)`);
+  } else if (memoryAverage > 0) {
+    aiScore = 9;
+    aiNotes.push(`Micron・Sandisk平均+${memoryAverage.toFixed(2)}%でメモリ同業が堅調 (+9点)`);
   } else {
-    aiScore += 4;
-    aiNotes.push(`市況は横ばい圏 (+4点)`);
+    aiNotes.push(`Micron・Sandisk平均${memoryAverage.toFixed(2)}%でメモリ同業が軟調 (0点)`);
   }
-
-  aiScore += 3;
-  aiNotes.push(`AIデータセンター向け大容量ストレージ採用加速 (+3点)`);
 
   // 4. Japan Market & FX (Max 10)
   let japanFxScore = 0;
   const japanFxNotes: string[] = [];
 
   const usdjpy = usQuotes.find((q) => q.symbol === 'USD/JPY');
-  if (usdjpy && usdjpy.price >= 140) {
+  if (usdjpy?.freshness !== 'FAILED' && usdjpy && usdjpy.price >= 140) {
     japanFxScore += 5;
     japanFxNotes.push(`為替レートは1ドル=${usdjpy.price}円台と採算ラインを大幅に上回り業績安心感 (+5点)`);
   } else {
@@ -153,9 +153,9 @@ export function calculateScoreBreakdown(
     japanFxNotes.push(`急激な円高リスクを警戒 (+2点)`);
   }
 
-  if (kioxia.changePercent > 0) {
+  if (kioxia.changePercent > 0 && kioxia.volumeRatioVs20d > 0) {
     japanFxScore += 3;
-    japanFxNotes.push(`東証プライム半導体関連への海外資金流入継続 (+3点)`);
+    japanFxNotes.push(`株価上昇と出来高増加が同時に確認できる (+3点)`);
   }
 
   // 5. News & Events (Max 10)
@@ -165,7 +165,9 @@ export function calculateScoreBreakdown(
   const positiveNewsCount = news.filter((n) => n.sentiment === 'POSITIVE').length;
   const negativeNewsCount = news.filter((n) => n.sentiment === 'NEGATIVE').length;
 
-  if (positiveNewsCount >= 2 && negativeNewsCount === 0) {
+  if (news.length === 0) {
+    newsNotes.push('最新ニュースを取得できないため加点なし');
+  } else if (positiveNewsCount >= 2 && negativeNewsCount === 0) {
     newsScore += 9;
     newsNotes.push(`ポジティブ材料が相次ぎネガティブ要因なし (+9点)`);
   } else if (negativeNewsCount > 0) {

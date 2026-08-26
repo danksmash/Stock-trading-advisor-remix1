@@ -468,7 +468,7 @@ export class RealApiMarketDataProvider implements IMarketDataProvider {
       return [
         { symbol: 'NVDA', name: 'NVIDIA Corp', price: 148.52, change: 4.61, changePercent: 3.21, afterHoursPrice: 149.10, afterHoursChangePercent: 0.39, lastUpdated: jstString, freshness: 'DEMO', category: 'CHIP' },
         { symbol: 'MU', name: 'Micron Technology', price: 112.40, change: 5.23, changePercent: 4.88, afterHoursPrice: 112.85, afterHoursChangePercent: 0.40, lastUpdated: jstString, freshness: 'DEMO', category: 'MEMORY' },
-        { symbol: 'WDC', name: 'Western Digital (Flash)', price: 78.90, change: 2.85, changePercent: 3.75, lastUpdated: jstString, freshness: 'DEMO', category: 'MEMORY' },
+        { symbol: 'SNDK', name: 'Sandisk Corporation', price: 78.90, change: 2.85, changePercent: 3.75, lastUpdated: jstString, freshness: 'DEMO', category: 'MEMORY' },
         { symbol: 'AMD', name: 'Advanced Micro Devices', price: 162.30, change: 3.45, changePercent: 2.17, lastUpdated: jstString, freshness: 'DEMO', category: 'CHIP' },
         { symbol: 'AVGO', name: 'Broadcom Inc', price: 178.60, change: 4.20, changePercent: 2.41, lastUpdated: jstString, freshness: 'DEMO', category: 'CHIP' },
         { symbol: '^SOX', name: 'Philadelphia Semiconductor Index', price: 5420.10, change: 102.30, changePercent: 1.92, lastUpdated: jstString, freshness: 'DEMO', category: 'INDEX' },

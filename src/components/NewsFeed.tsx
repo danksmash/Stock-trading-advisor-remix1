@@ -46,7 +46,12 @@ export const NewsFeed: React.FC<NewsFeedProps> = ({ news }) => {
       </div>
 
       <div className="space-y-2">
-        {news.map((item) => (
+        {news.length === 0 && (
+          <div className="rounded border border-gray-800 bg-[#0D1117] p-3 text-[10px] text-gray-400">
+            最新ニュースを取得できませんでした。固定記事による代替表示は行いません。
+          </div>
+        )}
+        {news.slice(0, 3).map((item) => (
           <div
             key={item.id}
             className="bg-[#0D1117] p-2 rounded border border-gray-800/80 hover:border-gray-700 transition-colors"
@@ -66,7 +71,9 @@ export const NewsFeed: React.FC<NewsFeedProps> = ({ news }) => {
             </div>
 
             {/* Title & Summary */}
-            <h3 className="text-xs font-bold text-gray-100 mb-0.5 leading-snug">{item.title}</h3>
+            <h3 className="text-xs font-bold text-gray-100 mb-0.5 leading-snug">
+              {item.url ? <a href={item.url} target="_blank" rel="noreferrer" className="hover:text-blue-300">{item.title}</a> : item.title}
+            </h3>
             <p className="text-[10px] text-gray-400 leading-normal mb-1.5">{item.summary}</p>
 
             {/* Specific Kioxia Impact */}

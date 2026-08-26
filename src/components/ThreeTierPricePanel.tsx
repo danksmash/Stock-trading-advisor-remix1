@@ -52,7 +52,7 @@ export const ThreeTierPricePanel: React.FC<ThreeTierPricePanelProps> = ({
     price: kioxia.prevClose || 0,
     date: '前営業日',
     benchmarkDescription: '前日比計算の基準価格（前営業日の東証公式終値）',
-    source: '東京証券取引所 公式終値 (TSE Official Close)',
+    source: 'Yahoo! Finance chart API (285A.T)',
   };
 
   const tokyo = kioxia.tokyoMarketInfo || {
@@ -66,7 +66,7 @@ export const ThreeTierPricePanel: React.FC<ThreeTierPricePanelProps> = ({
     vwap: kioxia.vwap,
     lastUpdated: kioxia.lastUpdated,
     dataQuality: kioxia.dataFreshness,
-    source: '東京証券取引所 (TSE / JPX Gateway)',
+    source: 'Yahoo! Finance chart API (285A.T)',
     isMarketOpen: kioxia.isMarketOpen,
   };
 

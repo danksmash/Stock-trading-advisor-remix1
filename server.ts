@@ -705,29 +705,31 @@ function calculateTechnicalIndicators(intraday5m: any[], dailyData: any[]) {
   }
 
   // MACD (12, 26, 9)
-  const getEMA = (data: number[], period: number) => {
-    if (data.length === 0) return 0;
+  const getEMASeries = (data: number[], period: number) => {
+    if (data.length === 0) return [];
     const k = 2 / (period + 1);
-    let ema = data[0];
+    const result = [data[0]];
     for (let i = 1; i < data.length; i++) {
-      ema = data[i] * k + ema * (1 - k);
+      result.push(data[i] * k + result[i - 1] * (1 - k));
     }
-    return ema;
+    return result;
   };
 
   let macdLine = 0;
   let signalLine = 0;
   let histogram = 0;
   if (n >= 26) {
-    const ema12 = getEMA(dailyCloses.slice(n - 26), 12);
-    const ema26 = getEMA(dailyCloses.slice(n - 26), 26);
-    macdLine = Number((ema12 - ema26).toFixed(2));
-    signalLine = Number((macdLine * 0.8).toFixed(2));
+    const ema12Series = getEMASeries(dailyCloses, 12);
+    const ema26Series = getEMASeries(dailyCloses, 26);
+    const macdSeries = dailyCloses.map((_, i) => ema12Series[i] - ema26Series[i]);
+    const signalSeries = getEMASeries(macdSeries, 9);
+    macdLine = Number(macdSeries[macdSeries.length - 1].toFixed(2));
+    signalLine = Number(signalSeries[signalSeries.length - 1].toFixed(2));
     histogram = Number((macdLine - signalLine).toFixed(2));
   }
 
   // ATR (14)
-  let atr14 = 85;
+  let atr14 = 0;
   if (dailyData.length >= 14) {
     const trs: number[] = [];
     for (let i = 1; i < dailyData.length; i++) {
@@ -794,7 +796,7 @@ app.get('/api/market/kioxia', async (req, res) => {
     try {
       [chart5m, chartDaily] = await Promise.all([
         fetchYahooChart('285A.T', '5m', '1d'),
-        fetchYahooChart('285A.T', '1d', '3mo'),
+        fetchYahooChart('285A.T', '1d', '2y'),
       ]);
     } catch (fetchErr) {
       console.warn('Direct 285A.T fetch unavailable, trying fallback/mirror:', fetchErr);
@@ -832,6 +834,23 @@ app.get('/api/market/kioxia', async (req, res) => {
         return { time: timeStr, timestamp: ts * 1000, open: o, high: h, low: l, close: c, volume: v, vwap: c };
       }).filter((c: any) => c.open > 0);
 
+      // Build true 1-hour OHLCV bars from the received 5-minute candles.
+      const hourlyMap = new Map<string, any>();
+      raw5m.forEach((c: any) => {
+        const hourKey = `${c.time.slice(0, 2)}:00`;
+        const existing = hourlyMap.get(hourKey);
+        if (!existing) {
+          hourlyMap.set(hourKey, { ...c, time: hourKey });
+        } else {
+          existing.high = Math.max(existing.high, c.high);
+          existing.low = Math.min(existing.low, c.low);
+          existing.close = c.close;
+          existing.volume += c.volume;
+          existing.vwap = c.vwap;
+        }
+      });
+      const hourly1h = Array.from(hourlyMap.values());
+
       // Extract daily candles
       const dTimestamps = chartDaily.timestamp || [];
       const dQuote = chartDaily.indicators?.quote?.[0] || {};
@@ -867,7 +886,7 @@ app.get('/api/market/kioxia', async (req, res) => {
         price: prevClose,
         date: prevCloseDate,
         benchmarkDescription: '前日比計算の基準価格（前営業日 東証公式終値）',
-        source: '東京証券取引所 公式終値 (TSE Official Close)',
+        source: 'Yahoo! Finance chart API (285A.T)',
       };
 
       const tokyoMarketInfo = {
@@ -881,7 +900,7 @@ app.get('/api/market/kioxia', async (req, res) => {
         vwap: tech.vwap || price,
         lastUpdated: jstTimeString,
         dataQuality: (isMarketOpen ? 'LIVE' : 'DELAYED') as any,
-        source: '東京証券取引所 (TSE / JPX Gateway)',
+        source: 'Yahoo! Finance chart API (285A.T)',
         isMarketOpen,
       };
 
@@ -912,7 +931,7 @@ app.get('/api/market/kioxia', async (req, res) => {
         prevHigh: rawDaily.length >= 2 ? rawDaily[rawDaily.length - 2].high : high,
         prevLow: rawDaily.length >= 2 ? rawDaily[rawDaily.length - 2].low : low,
         intraday5m: tech.intraday5m,
-        hourly1h: [],
+        hourly1h,
         daily1d: rawDaily,
         dataFreshness: isMarketOpen ? 'LIVE' : 'DELAYED',
         lastUpdated: jstTimeString,
@@ -946,7 +965,7 @@ app.get('/api/market/kioxia', async (req, res) => {
         vwap: 0,
         lastUpdated: jstTimeString,
         dataQuality: 'UNAVAILABLE' as any,
-        source: 'TSE / JPX Gateway',
+        source: 'Yahoo! Finance chart API',
         isMarketOpen: false,
       };
       const ptsMarketInfo = await fetchYahooJapanPtsData('285A', 0, 0);
@@ -1010,7 +1029,7 @@ app.get('/api/market/us-quotes', async (req, res) => {
     const symbols = [
       { sym: 'NVDA', name: 'NVIDIA Corp', category: 'CHIP' },
       { sym: 'MU', name: 'Micron Technology', category: 'MEMORY' },
-      { sym: 'WDC', name: 'Western Digital (Flash)', category: 'MEMORY' },
+      { sym: 'SNDK', name: 'Sandisk Corporation', category: 'MEMORY' },
       { sym: 'AMD', name: 'Advanced Micro Devices', category: 'CHIP' },
       { sym: 'AVGO', name: 'Broadcom Inc', category: 'CHIP' },
       { sym: '^SOX', name: 'Philadelphia Semiconductor Index', category: 'INDEX' },
@@ -1041,8 +1060,10 @@ app.get('/api/market/us-quotes', async (req, res) => {
             changePercent,
             afterHoursPrice: meta.postMarketPrice || undefined,
             afterHoursChangePercent: meta.postMarketChangePercent || undefined,
-            lastUpdated: jstTimeString,
-            freshness: 'LIVE',
+            lastUpdated: meta.regularMarketTime
+              ? new Date(meta.regularMarketTime * 1000).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }) + ' JST'
+              : jstTimeString,
+            freshness: meta.marketState === 'REGULAR' ? 'LIVE' : 'DELAYED',
             category,
             details: sym === 'NVDA' ? {
               nextEarningsDate: '情報取得不可（外部API未接続）',
@@ -1087,65 +1108,57 @@ app.get('/api/market/pts/history', (req, res) => {
   });
 });
 
-// API: Semiconductor and Kioxia News Feed (Curated Industry Context)
+// API: Latest semiconductor and Kioxia news. No archived article is presented as current.
 app.get('/api/market/news', async (req, res) => {
   try {
-    const cached = getCached('market_news_data', 60000); // 1 min cache
+    const cached = getCached('market_news_data', 5 * 60 * 1000);
     if (cached) {
       return res.json(cached);
     }
 
-    const defaultNews = [
-      {
-        id: 'news-1',
-        title: 'ハイパースケーラーのAIデータセンター拡張に伴いEnterprise SSD需要が急加速',
-        summary: '大手クラウド事業者各社がAIクラスタストレージの増設を前倒し。QLC/TLC NANDフラッシュのスポット価格・大口契約価格ともに上昇傾向。',
-        source: '業界レポート（参考アーカイブ）',
-        publishedAt: '参考情報',
-        sentiment: 'POSITIVE',
-        importance: 'HIGH',
-        kioxiaImpact: '主力エンタープライズSSD（BiCS FLASH™）の出荷増とマージン改善に直結。',
-        tags: ['NAND', 'Enterprise SSD', 'AI Data Center'],
-      },
-      {
-        id: 'news-2',
-        title: 'NANDフラッシュ在庫調整が完了、メモリメーカー各社の稼働率が引き上げ局面へ',
-        summary: '業界全体の在庫水準が適正化し、下半期の価格交渉力はサプライヤー側に有利にシフト。四半期売上高コンセンサスの上方修正が相次ぐ。',
-        source: '業界レポート（参考アーカイブ）',
-        publishedAt: '参考情報',
-        sentiment: 'POSITIVE',
-        importance: 'HIGH',
-        kioxiaImpact: '四日市・北上工場の稼働率改善と原価低減効果が業績寄与へ。',
-        tags: ['Memory Pricing', 'Inventory', 'Kioxia'],
-      },
-      {
-        id: 'news-3',
-        title: 'NVIDIA Blackwell次世代プラットフォームでのストレージ要件が倍増、高密度SSDが必須に',
-        summary: '次世代GPUクラスタのチェックポイント保存およびデータインジェスション要件により、大容量PCIe Gen5 SSDの需要が拡大。',
-        source: '業界レポート（参考アーカイブ）',
-        publishedAt: '参考情報',
-        sentiment: 'POSITIVE',
-        importance: 'MEDIUM',
-        kioxiaImpact: 'PCIe 5.0対応エンタープライズSSD市場でのシェア拡大機会。',
-        tags: ['AI Server', 'PCIe Gen5', 'NVIDIA'],
-      },
-      {
-        id: 'news-4',
-        title: '為替ドル円が142円台前半で推移、円高振れによる短期的な輸出採算への影響を注視',
-        summary: '日米金利差縮小観測からドル円が小幅軟化。輸出比率の高い半導体セクターにおける為替感応度が意識される展開。',
-        source: '為替概況（参考アーカイブ）',
-        publishedAt: '参考情報',
-        sentiment: 'NEUTRAL',
-        importance: 'LOW',
-        kioxiaImpact: 'ドル建て売上比率が高いため為替影響は中立〜軽微なマイナス要因。',
-        tags: ['USD/JPY', 'FX Risk', 'Macro'],
-      },
-    ];
+    const queries = ['285A.T', 'SNDK', 'NAND flash', 'enterprise SSD'];
+    const results = await Promise.all(queries.map(async (query) => {
+      const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=0&newsCount=8`;
+      const response = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' } });
+      if (!response.ok) return [];
+      const json: any = await response.json();
+      return Array.isArray(json?.news) ? json.news : [];
+    }));
 
-    setCached('market_news_data', defaultNews);
-    res.json(defaultNews);
+    const seen = new Set<string>();
+    const positive = /beat|growth|rise|gain|upgrade|demand|record|surge|上昇|増益|拡大|需要|上方/i;
+    const negative = /miss|fall|drop|cut|downgrade|risk|loss|下落|減益|下方|懸念|リスク/i;
+    const important = /kioxia|キオクシア|nand|ssd|sandisk|sndk|micron|nvidia/i;
+    const news = results.flat().filter((item: any) => {
+      const key = item.uuid || item.link || item.title;
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return important.test(item.title || '');
+    }).sort((a: any, b: any) => (b.providerPublishTime || 0) - (a.providerPublishTime || 0)).slice(0, 6).map((item: any, index: number) => {
+      const title = String(item.title || '');
+      const sentiment = negative.test(title) ? 'NEGATIVE' : positive.test(title) ? 'POSITIVE' : 'NEUTRAL';
+      const tags = ['Kioxia', 'NAND', 'SSD', 'Sandisk', 'Micron', 'NVIDIA'].filter((tag) => new RegExp(tag, 'i').test(title));
+      return {
+        id: item.uuid || `latest-news-${index}`,
+        title,
+        summary: '見出しに基づく速報です。詳細は配信元の記事で確認してください。',
+        source: item.publisher || 'Yahoo Finance News',
+        publishedAt: item.providerPublishTime
+          ? new Date(item.providerPublishTime * 1000).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }) + ' JST'
+          : '配信時刻不明',
+        sentiment,
+        importance: /kioxia|キオクシア|285A/i.test(title) ? 'HIGH' : 'MEDIUM',
+        kioxiaImpact: sentiment === 'POSITIVE' ? '業界需要・同業株の動向としてプラス材料候補。' : sentiment === 'NEGATIVE' ? '業界需要・同業株の動向としてリスク材料候補。' : '直接的な影響は記事本文の確認が必要。',
+        tags: tags.length ? tags : ['Semiconductor'],
+        url: item.link,
+      };
+    });
+
+    setCached('market_news_data', news);
+    res.json(news);
   } catch (error: any) {
-    res.status(500).json({ error: 'Failed to fetch news', news: [] });
+    console.warn('Latest news fetch failed:', error?.message || error);
+    res.json([]);
   }
 });
 
@@ -1353,4 +1366,3 @@ async function startServer() {
 }
 
 startServer();
-

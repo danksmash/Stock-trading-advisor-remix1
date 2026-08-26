@@ -9,9 +9,9 @@ interface UsSemiMarketProps {
 export const UsSemiMarket: React.FC<UsSemiMarketProps> = ({ quotes }) => {
   const nvda = quotes.find((q) => q.symbol === 'NVDA');
   const mu = quotes.find((q) => q.symbol === 'MU');
-  const wdc = quotes.find((q) => q.symbol === 'WDC');
+  const sndk = quotes.find((q) => q.symbol === 'SNDK');
   const sox = quotes.find((q) => q.symbol === '^SOX');
-  const otherQuotes = quotes.filter((q) => !['NVDA', 'MU', 'WDC', '^SOX'].includes(q.symbol));
+  const otherQuotes = quotes.filter((q) => !['NVDA', 'MU', 'SNDK', '^SOX'].includes(q.symbol));
 
   const getFreshnessBadge = (freshness: string) => {
     switch (freshness) {
@@ -42,18 +42,18 @@ export const UsSemiMarket: React.FC<UsSemiMarketProps> = ({ quotes }) => {
       {/* Primary Semiconductor Focus: NVIDIA Card */}
       {nvda && (
         <div className="bg-[#0D1117] border border-emerald-800/40 rounded p-2 mb-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
               <span className="text-xs font-black font-mono text-emerald-400 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-700/60">
                 NVDA
               </span>
-              <span className="text-xs font-bold text-gray-200">NVIDIA Corporation</span>
+              <span className="text-xs font-bold text-gray-200 truncate">NVIDIA Corporation</span>
             </div>
             {getFreshnessBadge(nvda.freshness)}
           </div>
 
-          <div className="flex items-baseline justify-between mt-1.5">
-            <div>
+          <div className="flex flex-wrap items-baseline justify-between gap-1 mt-1.5 min-w-0">
+            <div className="min-w-0">
               <span className="text-xl font-black font-mono text-white">${nvda.price.toFixed(2)}</span>
               <span className={`text-xs font-bold font-mono ml-1.5 ${nvda.change >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                 {nvda.change >= 0 ? `+${nvda.change.toFixed(2)}` : nvda.change.toFixed(2)} ({nvda.changePercent >= 0 ? `+${nvda.changePercent.toFixed(2)}` : nvda.changePercent.toFixed(2)}%)
@@ -87,16 +87,16 @@ export const UsSemiMarket: React.FC<UsSemiMarketProps> = ({ quotes }) => {
       )}
 
       {/* Memory Peers & SOX Index */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 mb-2">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-1.5 mb-2 min-w-0">
         {/* SOX Index */}
         {sox && (
-          <div className="bg-[#0D1117] p-1.5 rounded border border-gray-800 flex justify-between items-center">
-            <div>
+          <div className="bg-[#0D1117] p-1.5 rounded border border-gray-800 flex justify-between items-center min-w-0 gap-1">
+            <div className="min-w-0">
               <div className="text-[10px] font-bold font-mono text-blue-400">SOX 半導体指数</div>
               <div className="text-xs font-black font-mono text-white">{sox.price.toLocaleString()}</div>
             </div>
-            <div className="text-right">
-              <div className="text-[10px] font-mono font-bold text-emerald-400">+{sox.changePercent.toFixed(2)}%</div>
+            <div className="text-right shrink-0">
+              <div className={`text-[10px] font-mono font-bold ${sox.changePercent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{sox.changePercent >= 0 ? '+' : ''}{sox.changePercent.toFixed(2)}%</div>
               {getFreshnessBadge(sox.freshness)}
             </div>
           </div>
@@ -104,28 +104,30 @@ export const UsSemiMarket: React.FC<UsSemiMarketProps> = ({ quotes }) => {
 
         {/* Micron (MU) */}
         {mu && (
-          <div className="bg-[#0D1117] p-1.5 rounded border border-gray-800 flex justify-between items-center">
-            <div>
+          <div className="bg-[#0D1117] p-1.5 rounded border border-gray-800 flex justify-between items-center min-w-0 gap-1">
+            <div className="min-w-0">
               <div className="text-[10px] font-bold font-mono text-purple-400">Micron (MU)</div>
               <div className="text-xs font-black font-mono text-white">${mu.price.toFixed(2)}</div>
             </div>
-            <div className="text-right">
-              <div className="text-[10px] font-mono font-bold text-emerald-400">+{mu.changePercent.toFixed(2)}%</div>
+            <div className="text-right shrink-0">
+              <div className={`text-[10px] font-mono font-bold ${mu.changePercent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{mu.changePercent >= 0 ? '+' : ''}{mu.changePercent.toFixed(2)}%</div>
               <span className="text-[8px] text-gray-500 font-mono">DRAM/NAND</span>
             </div>
           </div>
         )}
 
-        {/* Western Digital (SanDisk Flash) */}
-        {wdc && (
-          <div className="bg-[#0D1117] p-1.5 rounded border border-gray-800 flex justify-between items-center">
-            <div>
-              <div className="text-[10px] font-bold font-mono text-cyan-400">SanDisk / WDC</div>
-              <div className="text-xs font-black font-mono text-white">${wdc.price.toFixed(2)}</div>
+        {/* Sandisk (independent company since 2025) */}
+        {sndk && (
+          <div className="bg-[#0D1117] p-1.5 rounded border border-gray-800 flex justify-between items-center min-w-0 gap-1">
+            <div className="min-w-0">
+              <div className="text-[10px] font-bold font-mono text-cyan-400 truncate">Sandisk (SNDK)</div>
+              <div className="text-xs font-black font-mono text-white whitespace-nowrap">${sndk.price.toFixed(2)}</div>
             </div>
-            <div className="text-right">
-              <div className="text-[10px] font-mono font-bold text-emerald-400">+{wdc.changePercent.toFixed(2)}%</div>
-              <span className="text-[8px] text-gray-500 font-mono">Flash Alliance</span>
+            <div className="text-right shrink-0">
+              <div className={`text-[10px] font-mono font-bold ${sndk.changePercent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {sndk.changePercent >= 0 ? '+' : ''}{sndk.changePercent.toFixed(2)}%
+              </div>
+              <span className="text-[8px] text-gray-500 font-mono">NAND / SSD</span>
             </div>
           </div>
         )}
@@ -140,7 +142,7 @@ export const UsSemiMarket: React.FC<UsSemiMarketProps> = ({ quotes }) => {
             return (
               <div
                 key={q.symbol}
-                className="bg-[#0D1117] px-2 py-1 rounded border border-gray-800/80 flex justify-between items-center"
+                className="bg-[#0D1117] px-2 py-1 rounded border border-gray-800/80 flex justify-between items-center min-w-0 gap-1"
               >
                 <div className="truncate">
                   <span className="font-bold text-gray-300 mr-1">{q.symbol}</span>
