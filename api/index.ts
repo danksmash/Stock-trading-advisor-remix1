@@ -21,6 +21,36 @@ type MinuteBar = {
   ma75?: number;
 };
 
+const translationCache = new Map<string, string>();
+const hasJapanese = (text: string) => /[ぁ-んァ-ン一-龯]/.test(text);
+
+async function translateHeadlineToJapanese(title: string): Promise<string> {
+  if (!title || hasJapanese(title)) return title;
+  const cached = translationCache.get(title);
+  if (cached) return cached;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6000);
+  try {
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q=${encodeURIComponent(title)}`;
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json,text/plain,*/*' },
+    });
+    if (!response.ok) throw new Error(`translation HTTP ${response.status}`);
+    const json: any = await response.json();
+    const translated = Array.isArray(json?.[0])
+      ? json[0].map((part: any) => String(part?.[0] || '')).join('').trim()
+      : '';
+    if (!translated || translated === title) throw new Error('translation returned unchanged title');
+    translationCache.set(title, translated);
+    if (translationCache.size > 200) translationCache.delete(translationCache.keys().next().value);
+    return translated;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function buildNextOpenDailyStatistics(daily: DailyBar[]) {
   if (!Array.isArray(daily) || daily.length < 40) return null;
   const latestIndex = daily.length - 1;
@@ -145,6 +175,22 @@ export default async function handler(req: Request, res: Response) {
       else if (value !== undefined && value !== null) search.append(key, String(value));
     }
     req.url = `/api/${pathValue}${search.size ? `?${search.toString()}` : ''}`;
+  }
+
+  if (pathValue === 'translate-news') {
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+    const titles = Array.isArray(req.body?.titles) ? req.body.titles.map(String).slice(0, 6) : [];
+    if (!titles.length) return res.status(200).json({ translations: [], translated: true });
+    const translations = await Promise.all(titles.map(async (title) => {
+      try { return await translateHeadlineToJapanese(title); }
+      catch (error) {
+        console.warn('[news translation] failed:', error instanceof Error ? error.message : String(error));
+        return null;
+      }
+    }));
+    const translated = translations.every((value, i) => typeof value === 'string' && value.length > 0 && (hasJapanese(value) || hasJapanese(titles[i])));
+    res.setHeader('Cache-Control', 's-maxage=1800, stale-while-revalidate=86400');
+    return res.status(200).json({ translations, translated });
   }
 
   if (pathValue === 'market/kioxia-intraday-1m') {
