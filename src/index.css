@@ -1,1 +1,14 @@
 @import "tailwindcss";
+
+:root {
+  --app-font-scale: 1.15;
+}
+
+html {
+  font-size: calc(16px * var(--app-font-scale));
+}
+
+/* Keep chart SVG geometry stable while allowing surrounding labels and UI text to scale. */
+svg text {
+  font-size: inherit;
+}
