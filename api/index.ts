@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import app from '../server';
+import app from '../server.ts';
 
 // Vercel rewrites every /api/* request to this single function and passes the
 // original sub-path in ?path=. Reconstruct the Express URL before dispatching
