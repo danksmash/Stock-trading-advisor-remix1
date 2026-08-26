@@ -8,7 +8,14 @@ html {
   font-size: calc(16px * var(--app-font-scale));
 }
 
-/* Keep chart SVG geometry stable while allowing surrounding labels and UI text to scale. */
+/* Tailwind arbitrary pixel labels do not inherit the root rem scale. */
+.text-\[8px\] { font-size: calc(8px * var(--app-font-scale)); }
+.text-\[9px\] { font-size: calc(9px * var(--app-font-scale)); }
+.text-\[9\.5px\] { font-size: calc(9.5px * var(--app-font-scale)); }
+.text-\[10px\] { font-size: calc(10px * var(--app-font-scale)); }
+.text-\[11px\] { font-size: calc(11px * var(--app-font-scale)); }
+
+/* Recharts and SVG labels may otherwise remain at fixed pixel sizes. */
 svg text {
-  font-size: inherit;
+  font-size: calc(1em * var(--app-font-scale));
 }
