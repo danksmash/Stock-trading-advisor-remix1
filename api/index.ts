@@ -1,5 +1,11 @@
 import type { Request, Response } from 'express';
-import app from '../server.ts';
+// The custom build creates dist/server.cjs from server.ts before Vercel packages
+// this function. Import the generated CommonJS bundle so the function does not
+// depend on TypeScript source files outside /api at runtime.
+// @ts-ignore - generated at build time by `npm run build`
+import serverModule from '../dist/server.cjs';
+
+const app: any = (serverModule as any)?.default ?? serverModule;
 
 // Vercel rewrites every /api/* request to this single function and passes the
 // original sub-path in ?path=. Reconstruct the Express URL before dispatching
