@@ -31,9 +31,18 @@ const ForecastRangeChart = React.lazy(() =>
 
 const marketDataProvider = new RealApiMarketDataProvider();
 const newsProvider = new RealNewsProvider();
-const FONT_SCALES = [0.9, 1, 1.15, 1.3, 1.5] as const;
-const DEFAULT_FONT_SCALE_INDEX = 2;
-const STANDARD_FONT_SCALE_INDEX = 1;
+
+// The former 150% appearance is now the 100% baseline requested for normal use.
+// Display percentages are relative to that new baseline, not to the old 16px root.
+const FONT_SCALE_OPTIONS = [
+  { label: 80, scale: 1.2 },
+  { label: 90, scale: 1.35 },
+  { label: 100, scale: 1.5 },
+  { label: 110, scale: 1.65 },
+  { label: 120, scale: 1.8 },
+] as const;
+const STANDARD_FONT_SCALE_INDEX = 2;
+const FONT_STORAGE_KEY = 'kioxia-font-scale-v2';
 
 export default function App() {
   const [kioxia, setKioxia] = useState<KioxiaMarketData | null>(null);
@@ -44,9 +53,11 @@ export default function App() {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [fontScaleIndex, setFontScaleIndex] = useState(() => {
-    if (typeof window === 'undefined') return DEFAULT_FONT_SCALE_INDEX;
-    const saved = Number(window.localStorage.getItem('kioxia-font-scale-index'));
-    return Number.isInteger(saved) && saved >= 0 && saved < FONT_SCALES.length ? saved : DEFAULT_FONT_SCALE_INDEX;
+    if (typeof window === 'undefined') return STANDARD_FONT_SCALE_INDEX;
+    const saved = Number(window.localStorage.getItem(FONT_STORAGE_KEY));
+    return Number.isInteger(saved) && saved >= 0 && saved < FONT_SCALE_OPTIONS.length
+      ? saved
+      : STANDARD_FONT_SCALE_INDEX;
   });
   const [isPortfolioOpen, setIsPortfolioOpen] = useState(false);
   const [isBacktestOpen, setIsBacktestOpen] = useState(false);
@@ -55,8 +66,8 @@ export default function App() {
   const [isDataSourcesOpen, setIsDataSourcesOpen] = useState(false);
 
   useEffect(() => {
-    document.documentElement.style.setProperty('--app-font-scale', String(FONT_SCALES[fontScaleIndex]));
-    window.localStorage.setItem('kioxia-font-scale-index', String(fontScaleIndex));
+    document.documentElement.style.setProperty('--app-font-scale', String(FONT_SCALE_OPTIONS[fontScaleIndex].scale));
+    window.localStorage.setItem(FONT_STORAGE_KEY, String(fontScaleIndex));
   }, [fontScaleIndex]);
 
   const fetchData = useCallback(async (demoMode = isDemoMode) => {
@@ -122,31 +133,35 @@ export default function App() {
     <div className="min-h-screen w-full bg-[#0B0E11] text-gray-200 font-sans flex flex-col antialiased selection:bg-blue-600 selection:text-white">
       <Header kioxia={kioxia} marketRegime={marketRegime} isRefreshing={isRefreshing} onRefresh={() => fetchData(isDemoMode)} onOpenPortfolio={() => setIsPortfolioOpen(true)} onOpenBacktest={() => setIsBacktestOpen(true)} onOpenAlerts={() => setIsAlertsOpen(true)} onOpenBreakdown={() => setIsScoreBreakdownOpen(true)} onOpenDataSources={() => setIsDataSourcesOpen(true)} isLiveMode={!isDemoMode} onToggleLiveMode={() => { const nextMode = !isDemoMode; setIsDemoMode(nextMode); fetchData(nextMode); }} />
 
-      <div className="sticky top-0 z-40 flex justify-end px-2 md:px-3 pointer-events-none">
-        <div className="pointer-events-auto mt-1 flex items-center gap-1 rounded-md border border-gray-700 bg-[#161B22]/95 p-1 shadow-lg backdrop-blur" aria-label="文字サイズ変更">
-          <span className="px-1.5 text-xs text-gray-400">文字</span>
-          <button type="button" onClick={() => setFontScaleIndex((i) => Math.max(0, i - 1))} disabled={fontScaleIndex === 0} className="min-w-8 rounded border border-gray-700 px-2 py-1 text-sm font-bold hover:bg-gray-700 disabled:opacity-30" aria-label="文字を小さくする">A−</button>
-          <button type="button" onClick={() => setFontScaleIndex(STANDARD_FONT_SCALE_INDEX)} className="min-w-10 rounded border border-gray-700 px-2 py-1 text-xs hover:bg-gray-700" aria-label="100パーセントの文字サイズに戻す">標準</button>
-          <button type="button" onClick={() => setFontScaleIndex((i) => Math.min(FONT_SCALES.length - 1, i + 1))} disabled={fontScaleIndex === FONT_SCALES.length - 1} className="min-w-8 rounded border border-gray-700 px-2 py-1 text-base font-bold hover:bg-gray-700 disabled:opacity-30" aria-label="文字を大きくする">A＋</button>
-          <span className="min-w-10 px-1 text-center text-xs tabular-nums text-blue-300">{Math.round(FONT_SCALES[fontScaleIndex] * 100)}%</span>
-        </div>
-      </div>
-
-      <main className="flex-1 p-2 md:p-3 max-w-[1720px] w-full mx-auto flex flex-col gap-2.5">
+      <main className="flex-1 p-2 max-w-[1720px] w-full mx-auto flex flex-col gap-2">
         <ThreeTierPricePanel kioxia={kioxia} usQuotes={usQuotes} news={news} isDemoMode={isDemoMode} />
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5">
-          <div className="lg:col-span-4 xl:col-span-3 flex flex-col gap-2.5">
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
+          <div className="lg:col-span-4 xl:col-span-3 flex flex-col gap-2">
             <SignalScoreCard signalInfo={signalInfo} scoreBreakdown={scoreBreakdown} buyCandidates={buyCandidates} chasingRisk={chasingRisk} dropAssessment={dropAssessment} onOpenBreakdown={() => setIsScoreBreakdownOpen(true)} />
             <AiCommentCard aiComment={aiComment} isLoading={isAiLoading} onRefreshComment={() => fetchAiComment(kioxia, usQuotes, scoreBreakdown, signalInfo.signal, true)} />
           </div>
-          <div className="lg:col-span-8 xl:col-span-6 flex flex-col gap-2.5">
+          <div className="lg:col-span-8 xl:col-span-9 flex flex-col gap-2 min-w-0">
             <PriceKeyMetrics kioxia={kioxia} />
             <CandleChart intraday5m={kioxia.intraday5m} hourly1h={kioxia.hourly1h} daily1d={kioxia.daily1d} currentPrice={kioxia.price} currentVwap={kioxia.vwap} />
             <React.Suspense fallback={<section className="bg-[#161B22] border border-gray-800 rounded p-3 text-xs text-gray-400">定量予測グラフを読み込み中...</section>}><ForecastRangeChart kioxia={kioxia} /></React.Suspense>
           </div>
-          <div className="lg:col-span-12 xl:col-span-3 flex flex-col gap-2.5"><UsSemiMarket quotes={usQuotes} /><NewsFeed news={news} /></div>
+        </div>
+
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-2 items-start">
+          <UsSemiMarket quotes={usQuotes} />
+          <NewsFeed news={news} />
         </div>
       </main>
+
+      <div className="fixed right-3 bottom-3 z-50 flex items-center gap-1 rounded-md border border-gray-700 bg-[#161B22]/95 p-1 shadow-lg backdrop-blur" aria-label="文字サイズ変更">
+        <span className="px-1 text-[10px] text-gray-400">文字</span>
+        <button type="button" onClick={() => setFontScaleIndex((i) => Math.max(0, i - 1))} disabled={fontScaleIndex === 0} className="min-w-8 rounded border border-gray-700 px-2 py-1 text-sm font-bold hover:bg-gray-700 disabled:opacity-30" aria-label="文字を小さくする">A−</button>
+        <button type="button" onClick={() => setFontScaleIndex(STANDARD_FONT_SCALE_INDEX)} className="min-w-10 rounded border border-gray-700 px-2 py-1 text-xs hover:bg-gray-700" aria-label="標準の文字サイズに戻す">標準</button>
+        <button type="button" onClick={() => setFontScaleIndex((i) => Math.min(FONT_SCALE_OPTIONS.length - 1, i + 1))} disabled={fontScaleIndex === FONT_SCALE_OPTIONS.length - 1} className="min-w-8 rounded border border-gray-700 px-2 py-1 text-base font-bold hover:bg-gray-700 disabled:opacity-30" aria-label="文字を大きくする">A＋</button>
+        <span className="min-w-10 px-1 text-center text-xs tabular-nums text-blue-300">{FONT_SCALE_OPTIONS[fontScaleIndex].label}%</span>
+      </div>
+
       <DisclaimerFooter lastUpdated={kioxia.lastUpdated} />
       <PortfolioModal isOpen={isPortfolioOpen} onClose={() => setIsPortfolioOpen(false)} kioxiaCurrentPrice={kioxia.price} />
       <BacktestModal isOpen={isBacktestOpen} onClose={() => setIsBacktestOpen(false)} />
