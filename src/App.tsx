@@ -148,7 +148,7 @@ export default function App() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-2 items-start">
+        <div className="flex flex-col gap-2 w-full">
           <UsSemiMarket quotes={usQuotes} />
           <NewsFeed news={news} />
         </div>
