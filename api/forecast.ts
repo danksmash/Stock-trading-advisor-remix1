@@ -5,17 +5,11 @@ type Bar = {
   low: number;
   close: number;
   volume: number;
+  dateKey: string;
+  minutes: number;
 };
 
-type ForecastPoint = {
-  horizonMinutes: number;
-  predictedReturnPct: number;
-  lower68ReturnPct: number;
-  upper68ReturnPct: number;
-  lower90ReturnPct: number;
-  upper90ReturnPct: number;
-  upProbability: number;
-};
+type Feature = number[];
 
 const SCALE = [1.2, 2.0, 3.0, 5.0, 1.6, 2.0, 1.2, 1.6, 3.0, 1.2];
 
@@ -34,18 +28,35 @@ async function fetchYahooChart(symbol: string, interval: string, range: string) 
   return result;
 }
 
+function fastJst(ms: number) {
+  const d = new Date(ms + 9 * 60 * 60 * 1000);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return {
+    dateKey: `${y}-${m}-${day}`,
+    minutes: d.getUTCHours() * 60 + d.getUTCMinutes(),
+  };
+}
+
 function parseBars(chart: any): Bar[] {
   const timestamps: number[] = chart?.timestamp || [];
   const q = chart?.indicators?.quote?.[0] || {};
   return timestamps
-    .map((ts, i) => ({
-      timestamp: ts * 1000,
-      open: Number(q.open?.[i]),
-      high: Number(q.high?.[i]),
-      low: Number(q.low?.[i]),
-      close: Number(q.close?.[i]),
-      volume: Number(q.volume?.[i] || 0),
-    }))
+    .map((ts, i) => {
+      const timestamp = ts * 1000;
+      const jst = fastJst(timestamp);
+      return {
+        timestamp,
+        open: Number(q.open?.[i]),
+        high: Number(q.high?.[i]),
+        low: Number(q.low?.[i]),
+        close: Number(q.close?.[i]),
+        volume: Number(q.volume?.[i] || 0),
+        dateKey: jst.dateKey,
+        minutes: jst.minutes,
+      };
+    })
     .filter((b) => Number.isFinite(b.open) && Number.isFinite(b.high) && Number.isFinite(b.low) && Number.isFinite(b.close) && b.close > 0);
 }
 
@@ -63,62 +74,49 @@ function clip(v: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, v));
 }
 
-function jstParts(ms: number) {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Tokyo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(new Date(ms));
-  const p: Record<string, string> = {};
-  for (const part of parts) p[part.type] = part.value;
-  let hour = Number(p.hour || 0);
-  if (hour === 24) hour = 0;
-  return {
-    dateKey: `${p.year}-${p.month}-${p.day}`,
-    minutes: hour * 60 + Number(p.minute || 0),
-  };
-}
+function buildFeatures(bars: Bar[]) {
+  const features: Feature[] = new Array(bars.length);
+  let dayStart = 0;
 
-function featureVector(bars: Bar[], i: number) {
-  const c = bars[i].close;
-  const ret = (n: number) => i >= n && bars[i - n].close > 0 ? ((c / bars[i - n].close) - 1) * 100 : 0;
-  const oneBarReturns: number[] = [];
-  for (let k = Math.max(1, i - 11); k <= i; k++) {
-    oneBarReturns.push(((bars[k].close / bars[k - 1].close) - 1) * 100);
+  for (let i = 0; i < bars.length; i++) {
+    if (i === 0 || bars[i].dateKey !== bars[i - 1].dateKey) dayStart = i;
+    const c = bars[i].close;
+    const ret = (n: number) => i >= n && bars[i - n].close > 0 ? ((c / bars[i - n].close) - 1) * 100 : 0;
+
+    const oneBarReturns: number[] = [];
+    for (let k = Math.max(1, i - 11); k <= i; k++) {
+      oneBarReturns.push(((bars[k].close / bars[k - 1].close) - 1) * 100);
+    }
+
+    const recent = bars.slice(Math.max(0, i - 11), i + 1);
+    const meanClose = mean(recent.map((b) => b.close)) || c;
+    const meanRange = mean(recent.slice(-6).map((b) => ((b.high - b.low) / b.close) * 100));
+    const volWindow = bars.slice(Math.max(0, i - 59), i + 1).map((b) => b.volume);
+    const volMean = mean(volWindow);
+    const volStd = std(volWindow) || 1;
+    const volumeZ = (bars[i].volume - volMean) / volStd;
+    const dayOpen = bars[dayStart]?.open || c;
+    const dayReturn = ((c / dayOpen) - 1) * 100;
+    const sessionProgress = clip((bars[i].minutes - 540) / 390, 0, 1);
+
+    features[i] = [
+      ret(1),
+      ret(3),
+      ret(6),
+      ret(12),
+      std(oneBarReturns),
+      meanRange,
+      ((c / meanClose) - 1) * 100,
+      clip(volumeZ, -4, 4),
+      dayReturn,
+      sessionProgress,
+    ];
   }
-  const recent = bars.slice(Math.max(0, i - 11), i + 1);
-  const meanClose = mean(recent.map((b) => b.close));
-  const meanRange = mean(recent.slice(-6).map((b) => ((b.high - b.low) / b.close) * 100));
-  const volWindow = bars.slice(Math.max(0, i - 59), i + 1).map((b) => b.volume);
-  const volMean = mean(volWindow);
-  const volStd = std(volWindow) || 1;
-  const volumeZ = (bars[i].volume - volMean) / volStd;
-  const currentJst = jstParts(bars[i].timestamp);
-  let dayStart = i;
-  while (dayStart > 0 && jstParts(bars[dayStart - 1].timestamp).dateKey === currentJst.dateKey) dayStart--;
-  const dayOpen = bars[dayStart]?.open || c;
-  const dayReturn = ((c / dayOpen) - 1) * 100;
-  const sessionProgress = clip((currentJst.minutes - 540) / 390, 0, 1);
 
-  return [
-    ret(1),
-    ret(3),
-    ret(6),
-    ret(12),
-    std(oneBarReturns),
-    meanRange,
-    ((c / meanClose) - 1) * 100,
-    clip(volumeZ, -4, 4),
-    dayReturn,
-    sessionProgress,
-  ];
+  return features;
 }
 
-function distance(a: number[], b: number[]) {
+function distance(a: Feature, b: Feature) {
   let sum = 0;
   for (let i = 0; i < a.length; i++) {
     const d = (a[i] - b[i]) / SCALE[i];
@@ -139,32 +137,52 @@ function weightedQuantile(values: { value: number; weight: number }[], q: number
   return sorted[sorted.length - 1].value;
 }
 
-function candidateTarget(bars: Bar[], i: number, horizonBars: number) {
-  const j = i + horizonBars;
-  if (j >= bars.length) return null;
-  const a = jstParts(bars[i].timestamp);
-  const b = jstParts(bars[j].timestamp);
-  if (a.dateKey !== b.dateKey) return null;
-  return ((bars[j].close / bars[i].close) - 1) * 100;
+function makeTargets(bars: Bar[], horizonBars: number) {
+  const targets: Array<number | null> = new Array(bars.length).fill(null);
+  for (let i = 0; i + horizonBars < bars.length; i++) {
+    const j = i + horizonBars;
+    if (bars[i].dateKey !== bars[j].dateKey) continue;
+    targets[i] = ((bars[j].close / bars[i].close) - 1) * 100;
+  }
+  return targets;
 }
 
-function buildForecast(bars: Bar[], currentIndex: number, horizonBars: number, crossAdjustmentPct: number) {
-  const currentFeature = featureVector(bars, currentIndex);
-  const currentTime = jstParts(bars[currentIndex].timestamp).minutes;
+function nearestDistribution(
+  bars: Bar[],
+  features: Feature[],
+  targets: Array<number | null>,
+  testIndex: number,
+  horizonBars: number,
+  maxNeighbors = 60
+) {
+  const current = features[testIndex];
+  const currentTime = bars[testIndex].minutes;
   const candidates: { dist: number; target: number }[] = [];
+  const stop = testIndex - horizonBars;
 
-  for (let i = 60; i < currentIndex - horizonBars; i++) {
-    const target = candidateTarget(bars, i, horizonBars);
+  for (let i = 60; i < stop; i++) {
+    const target = targets[i];
     if (target === null || !Number.isFinite(target)) continue;
-    const t = jstParts(bars[i].timestamp).minutes;
-    if (Math.abs(t - currentTime) > 90) continue;
-    candidates.push({ dist: distance(currentFeature, featureVector(bars, i)), target });
+    if (Math.abs(bars[i].minutes - currentTime) > 90) continue;
+    candidates.push({ dist: distance(current, features[i]), target });
   }
 
   candidates.sort((a, b) => a.dist - b.dist);
-  const k = Math.min(80, Math.max(24, Math.floor(Math.sqrt(candidates.length) * 2)));
+  const k = Math.min(maxNeighbors, Math.max(20, Math.floor(Math.sqrt(candidates.length) * 1.5)));
   const nearest = candidates.slice(0, k);
   const weighted = nearest.map((x) => ({ value: x.target, weight: 1 / (0.08 + x.dist * x.dist) }));
+  return { nearest, weighted };
+}
+
+function forecastOne(
+  bars: Bar[],
+  features: Feature[],
+  targets: Array<number | null>,
+  currentIndex: number,
+  horizonBars: number,
+  crossAdjustmentPerHourPct: number
+) {
+  const { nearest, weighted } = nearestDistribution(bars, features, targets, currentIndex, horizonBars, 70);
   const q10 = weightedQuantile(weighted, 0.10);
   const q16 = weightedQuantile(weighted, 0.16);
   const q50 = weightedQuantile(weighted, 0.50);
@@ -173,7 +191,7 @@ function buildForecast(bars: Bar[], currentIndex: number, horizonBars: number, c
   const totalW = weighted.reduce((s, x) => s + x.weight, 0) || 1;
   const upW = weighted.filter((x) => x.value > 0).reduce((s, x) => s + x.weight, 0);
   const horizonMinutes = horizonBars * 5;
-  const adj = crossAdjustmentPct * (horizonMinutes / 60);
+  const adj = crossAdjustmentPerHourPct * (horizonMinutes / 60);
 
   return {
     horizonMinutes,
@@ -200,6 +218,7 @@ async function getCrossMarketAdjustment() {
   let weighted = 0;
   let weightTotal = 0;
   const details: Record<string, number> = {};
+
   await Promise.all(symbols.map(async ([symbol, w]) => {
     try {
       const chart = await fetchYahooChart(symbol, '1d', '5d');
@@ -215,9 +234,10 @@ async function getCrossMarketAdjustment() {
         details[symbol] = Number(pct.toFixed(2));
       }
     } catch {
-      // Missing cross-market inputs reduce confidence but never fabricate data.
+      // Missing inputs lower coverage instead of creating substitute values.
     }
   }));
+
   const score = weightTotal ? weighted / weightTotal : 0;
   return {
     score: Number(score.toFixed(3)),
@@ -227,35 +247,24 @@ async function getCrossMarketAdjustment() {
   };
 }
 
-function walkForwardBacktest(bars: Bar[], horizonBars: number) {
+function walkForwardBacktest(bars: Bar[], features: Feature[], targets: Array<number | null>, horizonBars: number) {
   const eligible: number[] = [];
-  for (let i = 120; i < bars.length - horizonBars; i++) {
-    if (candidateTarget(bars, i, horizonBars) !== null) eligible.push(i);
+  for (let i = 180; i < bars.length - horizonBars; i++) {
+    if (targets[i] !== null) eligible.push(i);
   }
-  const tests = eligible.slice(-80);
+  const tests = eligible.slice(-32);
   const errors: number[] = [];
   let correctDirection = 0;
   let covered68 = 0;
   let used = 0;
 
   for (const testIndex of tests) {
-    const testFeature = featureVector(bars, testIndex);
-    const testTime = jstParts(bars[testIndex].timestamp).minutes;
-    const pool: { dist: number; target: number }[] = [];
-    for (let i = 60; i < testIndex - horizonBars; i++) {
-      const target = candidateTarget(bars, i, horizonBars);
-      if (target === null) continue;
-      if (Math.abs(jstParts(bars[i].timestamp).minutes - testTime) > 90) continue;
-      pool.push({ dist: distance(testFeature, featureVector(bars, i)), target });
-    }
-    pool.sort((a, b) => a.dist - b.dist);
-    const nearest = pool.slice(0, 50);
+    const { nearest, weighted } = nearestDistribution(bars, features, targets, testIndex, horizonBars, 40);
     if (nearest.length < 15) continue;
-    const weighted = nearest.map((x) => ({ value: x.target, weight: 1 / (0.08 + x.dist * x.dist) }));
-    const pred = weightedQuantile(weighted, 0.5);
+    const pred = weightedQuantile(weighted, 0.50);
     const lo = weightedQuantile(weighted, 0.16);
     const hi = weightedQuantile(weighted, 0.84);
-    const actual = candidateTarget(bars, testIndex, horizonBars)!;
+    const actual = targets[testIndex]!;
     errors.push(Math.abs(pred - actual));
     if ((pred >= 0) === (actual >= 0)) correctDirection++;
     if (actual >= lo && actual <= hi) covered68++;
@@ -273,34 +282,40 @@ function walkForwardBacktest(bars: Bar[], horizonBars: number) {
 
 export default async function handler(_req: any, res: any) {
   try {
-    let chart: any;
-    let sourceRange = '60d';
-    try {
-      chart = await fetchYahooChart('285A.T', '5m', '60d');
-    } catch {
-      sourceRange = '30d';
-      chart = await fetchYahooChart('285A.T', '5m', '30d');
-    }
+    const [chart, cross] = await Promise.all([
+      fetchYahooChart('285A.T', '5m', '30d'),
+      getCrossMarketAdjustment(),
+    ]);
 
     const bars = parseBars(chart);
     if (bars.length < 250) {
       return res.status(503).json({ error: 'Insufficient 5-minute history', barCount: bars.length });
     }
 
+    const features = buildFeatures(bars);
     const currentIndex = bars.length - 1;
-    const cross = await getCrossMarketAdjustment();
-    const horizons = [6, 12, 24].map((h) => buildForecast(bars, currentIndex, h, cross.adjustmentPerHourPct)) as Array<ForecastPoint & { neighborCount: number; avgDistance: number }>;
-    const backtest = walkForwardBacktest(bars, 12);
-    const avgDistance = mean(horizons.map((h) => h.avgDistance));
-    let confidence: 'HIGH' | 'MODERATE' | 'LOW' = 'LOW';
-    if (bars.length >= 1500 && (backtest.samples || 0) >= 40 && (backtest.directionAccuracyPct || 0) >= 54 && avgDistance < 1.8) confidence = 'HIGH';
-    else if (bars.length >= 700 && (backtest.samples || 0) >= 25 && avgDistance < 2.4) confidence = 'MODERATE';
+    const horizonBarsList = [6, 12, 24];
+    const targetMap = new Map<number, Array<number | null>>();
+    for (const h of horizonBarsList) targetMap.set(h, makeTargets(bars, h));
 
+    const horizons = horizonBarsList.map((h) =>
+      forecastOne(bars, features, targetMap.get(h)!, currentIndex, h, cross.adjustmentPerHourPct)
+    );
+
+    const backtestTargets = targetMap.get(12)!;
+    const backtest = walkForwardBacktest(bars, features, backtestTargets, 12);
+    const avgDistance = mean(horizons.map((h) => h.avgDistance));
+
+    let confidence: 'HIGH' | 'MODERATE' | 'LOW' = 'LOW';
+    if (bars.length >= 1200 && (backtest.samples || 0) >= 25 && (backtest.directionAccuracyPct || 0) >= 54 && avgDistance < 1.8) confidence = 'HIGH';
+    else if (bars.length >= 600 && (backtest.samples || 0) >= 20 && avgDistance < 2.5) confidence = 'MODERATE';
+
+    res.setHeader('Cache-Control', 's-maxage=45, stale-while-revalidate=120');
     return res.status(200).json({
-      model: 'KIOXIA Multi-Horizon Ensemble Forecast v1',
+      model: 'KIOXIA Multi-Horizon Ensemble Forecast v1.1',
       generatedAt: new Date().toISOString(),
       source: 'Yahoo Finance 285A.T 5-minute history + current cross-market overlay',
-      sourceRange,
+      sourceRange: '30d',
       historicalBarCount: bars.length,
       currentReferencePrice: bars[currentIndex].close,
       currentReferenceTime: bars[currentIndex].timestamp,
@@ -309,10 +324,10 @@ export default async function handler(_req: any, res: any) {
       confidence,
       crossMarket: cross,
       notes: [
-        'Core model is time-of-day matched k-nearest-neighbor analog forecasting on 5-minute OHLCV features.',
-        'Prediction bands are empirical neighbor quantiles, not guaranteed price limits.',
-        'Cross-market adjustment is deliberately capped to reduce overreaction to US market moves.',
-        'PTS display may re-anchor return forecasts to the latest validated PTS price; PTS-specific historical sample remains limited.',
+        'Core model uses time-of-day matched nearest-neighbor analogs on 5-minute OHLCV features.',
+        'Prediction bands are empirical weighted quantiles, not guaranteed limits.',
+        'Cross-market adjustment is capped to limit overreaction.',
+        'PTS display can re-anchor the return forecast to the latest validated PTS price.',
       ],
     });
   } catch (error: any) {
