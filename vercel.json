@@ -3,25 +3,14 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {
-    "api/index.ts": {
-      "maxDuration": 60
-    },
-    "api/forecast.ts": {
-      "maxDuration": 60
-    }
+    "api/index.ts": { "maxDuration": 60 },
+    "api/forecast.ts": { "maxDuration": 60 },
+    "api/translate-news.ts": { "maxDuration": 30 }
   },
   "rewrites": [
-    {
-      "source": "/api/forecast/kioxia",
-      "destination": "/api/forecast"
-    },
-    {
-      "source": "/api/:path*",
-      "destination": "/api?path=:path*"
-    },
-    {
-      "source": "/healthz",
-      "destination": "/api?path=healthz"
-    }
+    { "source": "/api/forecast/kioxia", "destination": "/api/forecast" },
+    { "source": "/api/translate-news", "destination": "/api/translate-news" },
+    { "source": "/api/:path*", "destination": "/api?path=:path*" },
+    { "source": "/healthz", "destination": "/api?path=healthz" }
   ]
 }
