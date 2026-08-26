@@ -32,6 +32,8 @@ const ForecastRangeChart = React.lazy(() =>
 const marketDataProvider = new RealApiMarketDataProvider();
 const newsProvider = new RealNewsProvider();
 const FONT_SCALES = [0.9, 1, 1.15, 1.3, 1.5] as const;
+const DEFAULT_FONT_SCALE_INDEX = 2;
+const STANDARD_FONT_SCALE_INDEX = 1;
 
 export default function App() {
   const [kioxia, setKioxia] = useState<KioxiaMarketData | null>(null);
@@ -42,9 +44,9 @@ export default function App() {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [fontScaleIndex, setFontScaleIndex] = useState(() => {
-    if (typeof window === 'undefined') return 2;
+    if (typeof window === 'undefined') return DEFAULT_FONT_SCALE_INDEX;
     const saved = Number(window.localStorage.getItem('kioxia-font-scale-index'));
-    return Number.isInteger(saved) && saved >= 0 && saved < FONT_SCALES.length ? saved : 2;
+    return Number.isInteger(saved) && saved >= 0 && saved < FONT_SCALES.length ? saved : DEFAULT_FONT_SCALE_INDEX;
   });
   const [isPortfolioOpen, setIsPortfolioOpen] = useState(false);
   const [isBacktestOpen, setIsBacktestOpen] = useState(false);
@@ -124,7 +126,7 @@ export default function App() {
         <div className="pointer-events-auto mt-1 flex items-center gap-1 rounded-md border border-gray-700 bg-[#161B22]/95 p-1 shadow-lg backdrop-blur" aria-label="文字サイズ変更">
           <span className="px-1.5 text-xs text-gray-400">文字</span>
           <button type="button" onClick={() => setFontScaleIndex((i) => Math.max(0, i - 1))} disabled={fontScaleIndex === 0} className="min-w-8 rounded border border-gray-700 px-2 py-1 text-sm font-bold hover:bg-gray-700 disabled:opacity-30" aria-label="文字を小さくする">A−</button>
-          <button type="button" onClick={() => setFontScaleIndex(2)} className="min-w-10 rounded border border-gray-700 px-2 py-1 text-xs hover:bg-gray-700" aria-label="標準の文字サイズに戻す">標準</button>
+          <button type="button" onClick={() => setFontScaleIndex(STANDARD_FONT_SCALE_INDEX)} className="min-w-10 rounded border border-gray-700 px-2 py-1 text-xs hover:bg-gray-700" aria-label="100パーセントの文字サイズに戻す">標準</button>
           <button type="button" onClick={() => setFontScaleIndex((i) => Math.min(FONT_SCALES.length - 1, i + 1))} disabled={fontScaleIndex === FONT_SCALES.length - 1} className="min-w-8 rounded border border-gray-700 px-2 py-1 text-base font-bold hover:bg-gray-700 disabled:opacity-30" aria-label="文字を大きくする">A＋</button>
           <span className="min-w-10 px-1 text-center text-xs tabular-nums text-blue-300">{Math.round(FONT_SCALES[fontScaleIndex] * 100)}%</span>
         </div>
