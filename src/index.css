@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 :root {
+  /* Former 150% appearance is the new normal 100% baseline. */
   --app-font-scale: 1.5;
 }
 
@@ -43,22 +44,36 @@ svg text[font-size="8"] { font-size: calc(8px * var(--app-font-scale)); }
   overflow-wrap: anywhere;
 }
 
-/* At desktop widths the 150% view needs more horizontal room per information card.
-   Keep the analysis column readable and move the US/news rail below it. */
-@media (min-width: 1024px) {
-  main > div.grid.grid-cols-1.lg\:grid-cols-12 {
-    grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
-  }
-  main > div.grid.grid-cols-1.lg\:grid-cols-12 > div:nth-child(1) {
-    grid-column: span 4 / span 4 !important;
-  }
-  main > div.grid.grid-cols-1.lg\:grid-cols-12 > div:nth-child(2) {
-    grid-column: span 8 / span 8 !important;
-  }
-  main > div.grid.grid-cols-1.lg\:grid-cols-12 > div:nth-child(3) {
-    grid-column: 1 / -1 !important;
-  }
+/* The US-focus tab did not control any distinct price card, so hide it rather than imply a function. */
+#three-tier-price-panel > div:first-child > div:last-child > button:last-child {
+  display: none;
+}
 
+/* Compact the enlarged three-price area and remove unnecessary vertical dead space. */
+#three-tier-price-panel {
+  padding: 0.65rem !important;
+  gap: 0.5rem !important;
+}
+#three-tier-price-panel > div:first-child {
+  padding-bottom: 0.35rem !important;
+  gap: 0.4rem !important;
+}
+#card-prev-close,
+#card-tokyo-live,
+#card-pts-live {
+  padding: 0.65rem !important;
+}
+#card-prev-close > div:nth-child(2),
+#card-tokyo-live > div:nth-child(2),
+#card-pts-live > div:nth-child(2) {
+  margin-top: 0.35rem !important;
+  margin-bottom: 0.35rem !important;
+  padding-top: 0.1rem !important;
+  padding-bottom: 0.1rem !important;
+}
+
+/* At desktop widths enlarged text needs more horizontal room per information card. */
+@media (min-width: 1024px) {
   #price-key-metrics > div {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
