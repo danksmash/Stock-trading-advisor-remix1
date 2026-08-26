@@ -103,7 +103,7 @@ export default async function handler(req: Request, res: Response) {
       return {
         id: `ja-news-${item.published || index}-${index}`,
         title: item.rawTitle,
-        summary: '日本語ニュースソースの見出しを表示しています。',
+        summary: '日本語ニュースソースの見出しです。',
         source: item.source,
         publishedAt: Number.isFinite(item.published)
           ? new Date(item.published).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }) + ' JST'
@@ -113,15 +113,14 @@ export default async function handler(req: Request, res: Response) {
         kioxiaImpact: c.impact,
         tags: c.tags,
         url: item.link,
-        language: 'ja',
-        feed: 'Google News 日本語RSS',
       };
     });
 
     res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=900');
-    return res.status(200).json({ news, source: 'Google News 日本語RSS', count: news.length, translated: false, nativeJapanese: true });
+    res.setHeader('X-News-Source', 'google-news-ja-rss');
+    return res.status(200).json(news);
   } catch (error) {
     console.error('[Japanese industry news] failed:', error instanceof Error ? error.message : String(error));
-    return res.status(502).json({ news: [], source: 'Google News 日本語RSS', count: 0, translated: false, nativeJapanese: true, error: '日本語ニュースを取得できませんでした' });
+    return res.status(502).json([]);
   }
 }
