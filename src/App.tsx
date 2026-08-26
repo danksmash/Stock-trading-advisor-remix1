@@ -32,8 +32,6 @@ const ForecastRangeChart = React.lazy(() =>
 const marketDataProvider = new RealApiMarketDataProvider();
 const newsProvider = new RealNewsProvider();
 
-// The former 150% appearance is now the 100% baseline requested for normal use.
-// Display percentages are relative to that new baseline, not to the old 16px root.
 const FONT_SCALE_OPTIONS = [
   { label: 80, scale: 1.2 },
   { label: 90, scale: 1.35 },
@@ -96,9 +94,32 @@ export default function App() {
     lastAiFetchRef.current = { time: now, key: currentKey };
     setIsAiLoading(true);
     try {
+      // Send only the scalar fields used by the comment endpoint. Intraday/daily
+      // candle arrays are intentionally excluded so 3-day 1m history never
+      // inflates the request body or triggers Express/Vercel body-size errors.
+      const marketCommentInput = {
+        price: kData.price,
+        change: kData.change,
+        changePercent: kData.changePercent,
+        vwap: kData.vwap,
+        volume: kData.volume,
+        volumeRatioVs20d: kData.volumeRatioVs20d,
+        rsi14: kData.rsi14,
+        macd: kData.macd,
+        ma5: kData.ma5,
+        ma20: kData.ma20,
+        ma25: kData.ma25,
+        ma75: kData.ma75,
+        atr14: kData.atr14,
+        dataFreshness: kData.dataFreshness,
+        marketSession: kData.marketSession,
+      };
+      const compactQuotes = quotes.map(({ symbol, name, price, change, changePercent, freshness, category }) => ({
+        symbol, name, price, change, changePercent, freshness, category,
+      }));
       const res = await fetch('/api/ai/market-comment', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kioxia: kData, usQuotes: quotes, scoreBreakdown, signal }),
+        body: JSON.stringify({ kioxia: marketCommentInput, usQuotes: compactQuotes, scoreBreakdown, signal }),
       });
       if (res.ok) setAiComment(await res.json());
     } catch (err) { console.error('AI comment API error:', err); }
