@@ -1365,4 +1365,10 @@ async function startServer() {
   });
 }
 
-startServer();
+// Vercel imports the Express application as a serverless function. The local
+// development/standalone production server still uses the normal port listener.
+if (!process.env.VERCEL) {
+  startServer();
+}
+
+export default app;
