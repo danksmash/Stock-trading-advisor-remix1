@@ -5,9 +5,16 @@
   "functions": {
     "api/index.ts": {
       "maxDuration": 60
+    },
+    "api/forecast.ts": {
+      "maxDuration": 60
     }
   },
   "rewrites": [
+    {
+      "source": "/api/forecast/kioxia",
+      "destination": "/api/forecast"
+    },
     {
       "source": "/api/:path*",
       "destination": "/api?path=:path*"
