@@ -4,7 +4,6 @@ import { ThreeTierPricePanel } from './components/ThreeTierPricePanel';
 import { SignalScoreCard } from './components/SignalScoreCard';
 import { PriceKeyMetrics } from './components/PriceKeyMetrics';
 import { CandleChart } from './components/CandleChart';
-import { ForecastRangeChart } from './components/ForecastRangeChart';
 import { AiCommentCard } from './components/AiCommentCard';
 import { UsSemiMarket } from './components/UsSemiMarket';
 import { NewsFeed } from './components/NewsFeed';
@@ -33,6 +32,10 @@ import {
   NewsItem,
   AiCommentResult,
 } from './types';
+
+const ForecastRangeChart = React.lazy(() =>
+  import('./components/ForecastRangeChart').then((m) => ({ default: m.ForecastRangeChart }))
+);
 
 const marketDataProvider = new RealApiMarketDataProvider();
 const newsProvider = new RealNewsProvider();
@@ -215,7 +218,15 @@ export default function App() {
               currentVwap={kioxia.vwap}
             />
 
-            <ForecastRangeChart kioxia={kioxia} />
+            <React.Suspense
+              fallback={
+                <section className="bg-[#161B22] border border-gray-800 rounded p-3 text-xs text-gray-400">
+                  定量予測グラフを読み込み中...
+                </section>
+              }
+            >
+              <ForecastRangeChart kioxia={kioxia} />
+            </React.Suspense>
           </div>
 
           <div className="lg:col-span-12 xl:col-span-3 flex flex-col gap-2.5">
