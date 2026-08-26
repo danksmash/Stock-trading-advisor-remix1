@@ -13,7 +13,8 @@ import { Activity, BrainCircuit, ShieldCheck, TriangleAlert } from 'lucide-react
 import { KioxiaMarketData } from '../types';
 
 type ForecastApiPoint = {
-  horizonMinutes: number;
+  horizonMinutes: number | null;
+  label?: string;
   predictedReturnPct: number;
   lower68ReturnPct: number;
   upper68ReturnPct: number;
@@ -27,6 +28,8 @@ type ForecastApiPoint = {
 type ForecastResponse = {
   model: string;
   generatedAt: string;
+  mode: 'INTRADAY' | 'NEXT_SESSION';
+  anchor: 'CURRENT_TSE' | 'TSE_CLOSE';
   historicalBarCount: number;
   confidence: 'HIGH' | 'MODERATE' | 'LOW';
   horizons: ForecastApiPoint[];
@@ -68,7 +71,6 @@ export const ForecastRangeChart: React.FC<ForecastRangeChartProps> = ({ kioxia }
 
   useEffect(() => {
     let cancelled = false;
-
     const load = async () => {
       try {
         const res = await fetch('/api/forecast/kioxia', { cache: 'no-store' });
@@ -93,19 +95,16 @@ export const ForecastRangeChart: React.FC<ForecastRangeChartProps> = ({ kioxia }
     };
   }, []);
 
-  const isPtsAnchor =
-    kioxia.marketSession === 'PTS SESSION' &&
-    kioxia.ptsMarketInfo?.isAvailable &&
-    Number(kioxia.ptsMarketInfo.price) > 0;
-
-  const basePrice = isPtsAnchor ? Number(kioxia.ptsMarketInfo.price) : kioxia.price;
-  const baseLabel = isPtsAnchor ? 'PTS現在値' : '東証現在値';
+  const ptsAvailable = Boolean(kioxia.ptsMarketInfo?.isAvailable && Number(kioxia.ptsMarketInfo.price) > 0);
+  const ptsPrice = ptsAvailable ? Number(kioxia.ptsMarketInfo.price) : null;
+  const basePrice = kioxia.price;
+  const isNextSession = forecast?.mode === 'NEXT_SESSION';
 
   const chartData = useMemo(() => {
     if (!forecast || !basePrice) return [];
     const rows: any[] = [
       {
-        label: '現在',
+        label: isNextSession ? '東証終値' : '現在',
         predicted: basePrice,
         lower68: basePrice,
         upper68: basePrice,
@@ -118,7 +117,7 @@ export const ForecastRangeChart: React.FC<ForecastRangeChartProps> = ({ kioxia }
     for (const h of forecast.horizons) {
       const priceFromReturn = (pct: number) => basePrice * (1 + pct / 100);
       rows.push({
-        label: formatFutureTime(h.horizonMinutes),
+        label: h.label || (h.horizonMinutes != null ? formatFutureTime(h.horizonMinutes) : '予測'),
         horizonMinutes: h.horizonMinutes,
         predicted: priceFromReturn(h.predictedReturnPct),
         lower68: priceFromReturn(h.lower68ReturnPct),
@@ -129,16 +128,17 @@ export const ForecastRangeChart: React.FC<ForecastRangeChartProps> = ({ kioxia }
       });
     }
     return rows;
-  }, [forecast, basePrice]);
+  }, [forecast, basePrice, isNextSession]);
 
   const priceDomain = useMemo(() => {
     if (!chartData.length) return ['auto', 'auto'] as const;
     const vals = chartData.flatMap((r) => [r.lower90, r.upper90]).filter(Number.isFinite);
+    if (ptsPrice) vals.push(ptsPrice);
     const min = Math.min(...vals);
     const max = Math.max(...vals);
     const pad = Math.max((max - min) * 0.12, basePrice * 0.002);
     return [Math.floor(min - pad), Math.ceil(max + pad)] as [number, number];
-  }, [chartData, basePrice]);
+  }, [chartData, basePrice, ptsPrice]);
 
   if (loading && !forecast) {
     return (
@@ -157,10 +157,11 @@ export const ForecastRangeChart: React.FC<ForecastRangeChartProps> = ({ kioxia }
     );
   }
 
-  if (!forecast) return null;
+  if (!forecast || forecast.horizons.length === 0) return null;
 
   const last = chartData[chartData.length - 1];
   const confidenceText = forecast.confidence === 'HIGH' ? '高' : forecast.confidence === 'MODERATE' ? '中' : '低';
+  const modeText = isNextSession ? '次営業日予測' : '場中短期予測';
 
   return (
     <section id="forecast-range-chart" className="bg-[#161B22] border border-gray-800 rounded p-2.5 flex flex-col gap-2">
@@ -171,27 +172,31 @@ export const ForecastRangeChart: React.FC<ForecastRangeChartProps> = ({ kioxia }
             <h2 className="text-[11px] font-bold text-gray-200 tracking-wide">定量モデル・予想株価レンジ</h2>
           </div>
           <p className="text-[9px] text-gray-500 mt-1">
-            285A 5分足の過去類似局面 + 時間帯 + OHLCV + 米国半導体連動。点予測ではなく確率レンジを表示。
+            {isNextSession
+              ? '市場終了後はPTSを学習済みデータと偽って使わず、過去の引け状態→翌営業日の実測分布を予測します。'
+              : '場中は285Aの5分足類似局面・時間帯・OHLCV・米国半導体連動から短期レンジを推定します。'}
           </p>
         </div>
         <div className="flex items-center gap-2 text-[9px] font-mono">
-          <span className="px-1.5 py-0.5 rounded border border-cyan-800/60 text-cyan-300 bg-cyan-950/30">
-            履歴 {forecast.historicalBarCount.toLocaleString()}本
-          </span>
-          <span className="px-1.5 py-0.5 rounded border border-gray-700 text-gray-300">
-            信頼度 {confidenceText}
-          </span>
+          <span className="px-1.5 py-0.5 rounded border border-cyan-800/60 text-cyan-300 bg-cyan-950/30">{modeText}</span>
+          <span className="px-1.5 py-0.5 rounded border border-cyan-800/60 text-cyan-300 bg-cyan-950/30">履歴 {forecast.historicalBarCount.toLocaleString()}本</span>
+          <span className="px-1.5 py-0.5 rounded border border-gray-700 text-gray-300">信頼度 {confidenceText}</span>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
         <div className="bg-[#0D1117] border border-gray-800 rounded p-2">
-          <div className="text-[9px] text-gray-500">基準</div>
+          <div className="text-[9px] text-gray-500">予測基準</div>
           <div className="text-sm font-mono font-bold text-white">{yen(basePrice)}</div>
-          <div className="text-[9px] text-cyan-400">{baseLabel}</div>
+          <div className="text-[9px] text-cyan-400">{isNextSession ? '東証終値' : '東証現在値'}</div>
         </div>
         <div className="bg-[#0D1117] border border-gray-800 rounded p-2">
-          <div className="text-[9px] text-gray-500">2時間中心予測</div>
+          <div className="text-[9px] text-gray-500">現在PTS参考</div>
+          <div className="text-sm font-mono font-bold text-white">{ptsPrice ? yen(ptsPrice) : '---'}</div>
+          <div className="text-[9px] text-gray-400">予測学習には未使用</div>
+        </div>
+        <div className="bg-[#0D1117] border border-gray-800 rounded p-2">
+          <div className="text-[9px] text-gray-500">最長中心予測</div>
           <div className="text-sm font-mono font-bold text-white">{last ? yen(last.predicted) : '---'}</div>
           <div className="text-[9px] text-gray-400">上昇確率 {last?.upProbability?.toFixed?.(1) ?? '---'}%</div>
         </div>
@@ -207,24 +212,13 @@ export const ForecastRangeChart: React.FC<ForecastRangeChartProps> = ({ kioxia }
         </div>
       </div>
 
-      <div className="h-[260px] w-full bg-[#0D1117] border border-gray-800 rounded p-1">
+      <div className="h-[270px] w-full bg-[#0D1117] border border-gray-800 rounded p-1">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData} margin={{ top: 12, right: 16, left: 8, bottom: 4 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#252b34" />
             <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#9ca3af' }} axisLine={{ stroke: '#374151' }} tickLine={false} />
-            <YAxis
-              domain={priceDomain as any}
-              tick={{ fontSize: 9, fill: '#9ca3af' }}
-              axisLine={{ stroke: '#374151' }}
-              tickLine={false}
-              tickFormatter={(v) => `¥${Math.round(Number(v) / 100) * 100}`}
-              width={62}
-            />
-            <Tooltip
-              contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 6, fontSize: 10 }}
-              formatter={(value: any, name: any) => [yen(Number(value)), name]}
-              labelStyle={{ color: '#d1d5db' }}
-            />
+            <YAxis domain={priceDomain as any} tick={{ fontSize: 9, fill: '#9ca3af' }} axisLine={{ stroke: '#374151' }} tickLine={false} tickFormatter={(v) => `¥${Math.round(Number(v) / 100) * 100}`} width={62} />
+            <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 6, fontSize: 10 }} formatter={(value: any, name: any) => [yen(Number(value)), name]} labelStyle={{ color: '#d1d5db' }} />
             <Legend wrapperStyle={{ fontSize: 9 }} />
             <Line type="monotone" dataKey="upper90" name="90%上限" stroke="#6b7280" strokeDasharray="3 4" dot={false} strokeWidth={1} />
             <Line type="monotone" dataKey="upper68" name="68%上限" stroke="#22d3ee" strokeDasharray="4 3" dot={false} strokeWidth={1.2} />
@@ -238,15 +232,15 @@ export const ForecastRangeChart: React.FC<ForecastRangeChartProps> = ({ kioxia }
       <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-[9px]">
         <div className="flex items-start gap-1.5 text-gray-400">
           <Activity className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-          類似局面は時刻±90分で絞り、直近モメンタム・変動率・レンジ・出来高・日中位置を正規化して近傍検索します。
+          類似局面はモメンタム・変動率・レンジ・出来高・日中位置を正規化して近傍検索し、中心値と68%/90%レンジを実測分布から計算します。
         </div>
         <div className="flex items-start gap-1.5 text-gray-400">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-          検証はwalk-forward方式で、各テスト時点より後のデータを学習側に混ぜません。
+          検証はwalk-forward方式で、各テスト時点より後の観測値を学習側へ混ぜません。
         </div>
         <div className="flex items-start gap-1.5 text-gray-400">
           <TriangleAlert className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-          予測レンジは確率的推定であり保証価格ではありません。PTS時は最新PTS値に予測リターンを再アンカーします。
+          予測レンジは保証価格ではありません。PTS履歴が十分になるまではPTS現在値を参考表示に限定し、予測精度を過大表示しません。
         </div>
       </div>
     </section>
