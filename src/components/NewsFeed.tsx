@@ -1,11 +1,8 @@
 import React from 'react';
 import { Newspaper, ArrowUpRight, ArrowDownRight, Minus, ExternalLink } from 'lucide-react';
 import { NewsItem, NewsSentiment } from '../types';
-
 interface NewsFeedProps { news: NewsItem[]; }
-
 const sentimentLabel: Record<NewsSentiment, string> = { POSITIVE: 'プラス材料', NEGATIVE: 'マイナス材料', NEUTRAL: '中立' };
-
 export const NewsFeed: React.FC<NewsFeedProps> = ({ news }) => {
   const getSentimentBadge = (sentiment: NewsSentiment) => {
     const common = 'text-[8px] font-bold border px-1.5 py-0.5 rounded flex items-center gap-0.5 whitespace-nowrap';
@@ -13,26 +10,18 @@ export const NewsFeed: React.FC<NewsFeedProps> = ({ news }) => {
     if (sentiment === 'NEGATIVE') return <span className={`${common} bg-rose-950/80 text-rose-400 border-rose-700/60`}><ArrowDownRight className="w-2.5 h-2.5" />{sentimentLabel[sentiment]}</span>;
     return <span className={`${common} bg-gray-800 text-gray-300 border-gray-700`}><Minus className="w-2.5 h-2.5" />{sentimentLabel[sentiment]}</span>;
   };
-
-  return (
-    <section id="sector-news-feed" className="bg-[#161B22] border border-gray-800 rounded p-2.5 flex flex-col">
-      <div className="flex flex-wrap items-start justify-between gap-2 mb-2 pb-1.5 border-b border-gray-800">
-        <div className="flex items-start gap-1.5 min-w-0"><Newspaper className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" /><div><h2 className="text-[10px] font-bold text-gray-200 tracking-wide">半導体・NAND業界ニュース</h2><p className="text-[8px] text-gray-500 mt-0.5">ニュースソースの原見出しをそのまま表示し、キオクシアへの関連だけを整理しています。</p></div></div>
-        <span className="text-[8px] text-gray-500 font-mono">自動分類・参考情報</span>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-2">
-        {news.length === 0 && <div className="xl:col-span-3 rounded border border-gray-800 bg-[#0D1117] p-3 text-[10px] text-gray-400">最新ニュースを取得できませんでした。古い固定記事や推測記事は代替表示しません。</div>}
-        {news.slice(0, 6).map((item) => (
-          <article key={item.id} className="bg-[#0D1117] p-2.5 rounded border border-gray-800/80 flex flex-col gap-1.5 min-w-0">
-            <div className="flex flex-wrap items-center gap-1.5">{getSentimentBadge(item.sentiment)}<span className="text-[9px] font-mono text-gray-400 font-semibold break-words">{item.source}</span>{item.importance === 'HIGH' && <span className="text-[8px] bg-red-950/60 text-red-400 border border-red-800/40 px-1 rounded font-bold">重要</span>}<span className="text-[8px] font-mono text-gray-500 ml-auto">{item.publishedAt}</span></div>
-            <h3 className="text-xs font-bold text-gray-100 leading-relaxed break-words">{item.title}</h3>
-            <div className="bg-[#161B22] p-2 rounded border border-gray-800 text-[9px] leading-relaxed"><span className="text-blue-400 font-bold">キオクシアへの見方：</span><span className="text-gray-300"> {item.kioxiaImpact}</span></div>
-            <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-0.5">{item.tags.map((t) => <span key={t} className="text-[8px] font-mono bg-gray-900 text-gray-400 px-1.5 py-0.5 rounded border border-gray-800">#{t}</span>)}{item.url && <a href={item.url} target="_blank" rel="noreferrer" className="ml-auto inline-flex items-center gap-1 text-[8px] text-blue-400 hover:text-blue-300">原記事を開く <ExternalLink className="w-2.5 h-2.5" /></a>}</div>
-          </article>
-        ))}
-      </div>
-      <p className="mt-2 text-[8px] text-gray-500 leading-relaxed">※ 見出しは取得したニュースソースの原題をそのまま表示しています。センチメント分類とキオクシアへの影響評価は参考情報です。重要な売買判断では一次情報も確認してください。</p>
-    </section>
-  );
+  return <section id="sector-news-feed" className="bg-[#161B22] border border-gray-800 rounded p-2.5 flex flex-col">
+    <div className="flex flex-wrap items-start justify-between gap-2 mb-2 pb-1.5 border-b border-gray-800"><div className="flex items-start gap-1.5 min-w-0"><Newspaper className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" /><div><h2 className="text-[10px] font-bold text-gray-200 tracking-wide">半導体・NAND業界ニュース（日本語訳）</h2><p className="text-[8px] text-gray-500 mt-0.5">ニュースソースの原見出しを内容を変えず日本語訳して表示します。</p></div></div><span className="text-[8px] text-gray-500 font-mono">自動翻訳・参考情報</span></div>
+    <div className="grid grid-cols-1 xl:grid-cols-3 gap-2">
+      {news.length === 0 && <div className="xl:col-span-3 rounded border border-gray-800 bg-[#0D1117] p-3 text-[10px] text-gray-400">最新ニュースを取得できませんでした。</div>}
+      {news.slice(0,6).map(item => <article key={item.id} className="bg-[#0D1117] p-2.5 rounded border border-gray-800/80 flex flex-col gap-1.5 min-w-0">
+        <div className="flex flex-wrap items-center gap-1.5">{getSentimentBadge(item.sentiment)}<span className="text-[9px] font-mono text-gray-400 font-semibold break-words">{item.source}</span>{item.importance === 'HIGH' && <span className="text-[8px] bg-red-950/60 text-red-400 border border-red-800/40 px-1 rounded font-bold">重要</span>}<span className="text-[8px] font-mono text-gray-500 ml-auto">{item.publishedAt}</span></div>
+        <h3 className="text-xs font-bold text-gray-100 leading-relaxed break-words">{item.translatedTitle || item.title}</h3>
+        {item.translatedTitle && item.translatedTitle !== item.title && <p className="text-[8px] text-gray-600 leading-snug">原題：{item.title}</p>}
+        <div className="bg-[#161B22] p-2 rounded border border-gray-800 text-[9px] leading-relaxed"><span className="text-blue-400 font-bold">キオクシアへの見方：</span><span className="text-gray-300"> {item.kioxiaImpact}</span></div>
+        <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-0.5">{item.tags.map(t => <span key={t} className="text-[8px] font-mono bg-gray-900 text-gray-400 px-1.5 py-0.5 rounded border border-gray-800">#{t}</span>)}{item.url && <a href={item.url} target="_blank" rel="noreferrer" className="ml-auto inline-flex items-center gap-1 text-[8px] text-blue-400 hover:text-blue-300">原記事を開く <ExternalLink className="w-2.5 h-2.5" /></a>}</div>
+      </article>)}
+    </div>
+    <p className="mt-2 text-[8px] text-gray-500 leading-relaxed">※ 日本語見出しは取得した原見出しの自動翻訳です。原題も併記し、内容を要約・一般化して同じ見出しに置き換えない設計です。</p>
+  </section>;
 };
