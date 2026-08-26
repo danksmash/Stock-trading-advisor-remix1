@@ -44,7 +44,7 @@ svg text[font-size="8"] { font-size: calc(8px * var(--app-font-scale)); }
   overflow-wrap: anywhere;
 }
 
-/* The US-focus tab did not control any distinct price card, so hide it rather than imply a function. */
+/* The US-focus tab did not control any distinct price card, so remove it from the visible UI. */
 #three-tier-price-panel > div:first-child > div:last-child > button:last-child {
   display: none;
 }
@@ -70,6 +70,23 @@ svg text[font-size="8"] { font-size: calc(8px * var(--app-font-scale)); }
   margin-bottom: 0.35rem !important;
   padding-top: 0.1rem !important;
   padding-bottom: 0.1rem !important;
+}
+
+/* The production API now uses actual TSE daily history when PTS→next-open pairs are insufficient.
+   Correct the legacy static labels so the UI does not imply that these are PTS-pair statistics. */
+#three-tier-price-panel div[class~="lg:grid-cols-2"] > div:nth-child(2) > div:first-child > div:first-child > div:first-child > span {
+  font-size: 0;
+}
+#three-tier-price-panel div[class~="lg:grid-cols-2"] > div:nth-child(2) > div:first-child > div:first-child > div:first-child > span::after {
+  content: "翌営業日 寄り付き参考動向（東証日足統計）";
+  font-size: 0.75rem;
+}
+#three-tier-price-panel div[class~="lg:grid-cols-2"] > div:nth-child(2) div[class~="space-y-1.5"] > div:first-child > span:first-child {
+  font-size: 0;
+}
+#three-tier-price-panel div[class~="lg:grid-cols-2"] > div:nth-child(2) div[class~="space-y-1.5"] > div:first-child > span:first-child::after {
+  content: "類似する東証日足局面の翌日寄り付き結果:";
+  font-size: calc(10px * var(--app-font-scale));
 }
 
 /* At desktop widths enlarged text needs more horizontal room per information card. */
