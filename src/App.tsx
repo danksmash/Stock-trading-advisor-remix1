@@ -4,6 +4,7 @@ import { ThreeTierPricePanel } from './components/ThreeTierPricePanel';
 import { SignalScoreCard } from './components/SignalScoreCard';
 import { PriceKeyMetrics } from './components/PriceKeyMetrics';
 import { CandleChart } from './components/CandleChart';
+import { ForecastRangeChart } from './components/ForecastRangeChart';
 import { AiCommentCard } from './components/AiCommentCard';
 import { UsSemiMarket } from './components/UsSemiMarket';
 import { NewsFeed } from './components/NewsFeed';
@@ -46,14 +47,12 @@ export default function App() {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isDemoMode, setIsDemoMode] = useState(false);
 
-  // Modal States
   const [isPortfolioOpen, setIsPortfolioOpen] = useState(false);
   const [isBacktestOpen, setIsBacktestOpen] = useState(false);
   const [isScoreBreakdownOpen, setIsScoreBreakdownOpen] = useState(false);
   const [isAlertsOpen, setIsAlertsOpen] = useState(false);
   const [isDataSourcesOpen, setIsDataSourcesOpen] = useState(false);
 
-  // Fetch initial data
   const fetchData = useCallback(async (demoMode = isDemoMode) => {
     setIsRefreshing(true);
     try {
@@ -73,10 +72,8 @@ export default function App() {
     }
   }, [isDemoMode]);
 
-  // Ref to track last AI fetch to prevent rapid quota depletion
   const lastAiFetchRef = React.useRef<{ time: number; key: string }>({ time: 0, key: '' });
 
-  // Fetch AI comment from backend
   const fetchAiComment = useCallback(
     async (
       kData: KioxiaMarketData,
@@ -88,7 +85,6 @@ export default function App() {
       const now = Date.now();
       const currentKey = `${signal}_${Math.round(kData.price / 20) * 20}_${Math.round((scoreBreakdown?.total || 0) / 10) * 10}`;
 
-      // Throttle: don't re-fetch unless forced, or 60s has passed, or key changed
       if (!force && lastAiFetchRef.current.key === currentKey && now - lastAiFetchRef.current.time < 60000) {
         return;
       }
@@ -123,7 +119,6 @@ export default function App() {
     fetchData(isDemoMode);
   }, [fetchData, isDemoMode]);
 
-  // Trigger AI analysis when market data updates (with intelligent throttling)
   useEffect(() => {
     if (kioxia && usQuotes.length > 0) {
       const isDataValid = kioxia.price > 0 && kioxia.dataFreshness !== 'FAILED' && kioxia.dataFreshness !== 'UNAVAILABLE';
@@ -133,7 +128,6 @@ export default function App() {
     }
   }, [kioxia, usQuotes, news, fetchAiComment]);
 
-  // Auto polling simulation (every 30 seconds)
   useEffect(() => {
     const timer = setInterval(() => {
       fetchData(isDemoMode);
@@ -154,7 +148,6 @@ export default function App() {
     );
   }
 
-  // Real-time Calculations
   const isDataValid = kioxia.price > 0 && kioxia.dataFreshness !== 'FAILED';
   const scoreBreakdown = calculateScoreBreakdown(kioxia, usQuotes, news);
   const signalInfo = determineSignal(scoreBreakdown.total, kioxia, isDataValid);
@@ -165,7 +158,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen w-full bg-[#0B0E11] text-gray-200 font-sans flex flex-col antialiased selection:bg-blue-600 selection:text-white">
-      {/* 1. Header Toolbar */}
       <Header
         kioxia={kioxia}
         marketRegime={marketRegime}
@@ -184,9 +176,7 @@ export default function App() {
         }}
       />
 
-      {/* 2. Main Dashboard Layout */}
       <main className="flex-1 p-2 md:p-3 max-w-[1720px] w-full mx-auto flex flex-col gap-2.5">
-        {/* 3-Tier Price Architecture Panel (Previous Close, Tokyo Live, PTS Live) */}
         <ThreeTierPricePanel
           kioxia={kioxia}
           usQuotes={usQuotes}
@@ -194,9 +184,7 @@ export default function App() {
           isDemoMode={isDemoMode}
         />
 
-        {/* 3-Column Detailed Analysis Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5">
-          {/* Left Column (3 Cols): Giant Signal, Score Breakdown, Target Buy Zones */}
           <div className="lg:col-span-4 xl:col-span-3 flex flex-col gap-2.5">
             <SignalScoreCard
               signalInfo={signalInfo}
@@ -207,7 +195,6 @@ export default function App() {
               onOpenBreakdown={() => setIsScoreBreakdownOpen(true)}
             />
 
-            {/* AI Market Comment on Left or Desktop */}
             <AiCommentCard
               aiComment={aiComment}
               isLoading={isAiLoading}
@@ -217,12 +204,9 @@ export default function App() {
             />
           </div>
 
-          {/* Center Column (6 Cols): Price Metrics, Candlestick Chart, Heatmap Matrix, Similar Scenarios */}
           <div className="lg:col-span-8 xl:col-span-6 flex flex-col gap-2.5">
-            {/* Key Technical Indicators & VWAP Metrics */}
             <PriceKeyMetrics kioxia={kioxia} />
 
-            {/* Candlestick & VWAP Chart */}
             <CandleChart
               intraday5m={kioxia.intraday5m}
               hourly1h={kioxia.hourly1h}
@@ -231,23 +215,18 @@ export default function App() {
               currentVwap={kioxia.vwap}
             />
 
+            <ForecastRangeChart kioxia={kioxia} />
           </div>
 
-          {/* Right Column (3 Cols): US Semiconductor, NVDA, Memory News */}
           <div className="lg:col-span-12 xl:col-span-3 flex flex-col gap-2.5">
-            {/* US Semiconductor & NVDA & SOX */}
             <UsSemiMarket quotes={usQuotes} />
-
-            {/* NAND / Enterprise SSD / AI Storage News */}
             <NewsFeed news={news} />
           </div>
         </div>
       </main>
 
-      {/* 3. Legal Disclaimers & Timestamp Footer */}
       <DisclaimerFooter lastUpdated={kioxia.lastUpdated} />
 
-      {/* Interactive Modals */}
       <PortfolioModal
         isOpen={isPortfolioOpen}
         onClose={() => setIsPortfolioOpen(false)}
