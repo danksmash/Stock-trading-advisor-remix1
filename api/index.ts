@@ -23,14 +23,11 @@ type MinuteBar = {
 
 function buildNextOpenDailyStatistics(daily: DailyBar[]) {
   if (!Array.isArray(daily) || daily.length < 40) return null;
-
   const latestIndex = daily.length - 1;
   const previousClose = daily[latestIndex - 1]?.close || 0;
   const latestClose = daily[latestIndex]?.close || 0;
   if (previousClose <= 0 || latestClose <= 0) return null;
-
   const latestReturnPct = ((latestClose / previousClose) - 1) * 100;
-
   const collect = (bandPct: number) => {
     const observations: number[] = [];
     for (let i = 1; i < daily.length - 1; i++) {
@@ -38,29 +35,22 @@ function buildNextOpenDailyStatistics(daily: DailyBar[]) {
       const close = daily[i]?.close || 0;
       const nextOpen = daily[i + 1]?.open || 0;
       if (prev <= 0 || close <= 0 || nextOpen <= 0) continue;
-
       const dayReturnPct = ((close / prev) - 1) * 100;
       if (Math.abs(dayReturnPct - latestReturnPct) > bandPct) continue;
       observations.push(((nextOpen / close) - 1) * 100);
     }
     return observations;
   };
-
   let band = 1.25;
   let observations = collect(band);
-  if (observations.length < 20) {
-    band = 2.5;
-    observations = collect(band);
-  }
+  if (observations.length < 20) { band = 2.5; observations = collect(band); }
   if (observations.length < 10) return null;
-
   const up = observations.filter((v) => v > 0.5).length;
   const down = observations.filter((v) => v < -0.5).length;
   const flat = observations.length - up - down;
   const upPercent = Math.round((up / observations.length) * 100);
   const flatPercent = Math.round((flat / observations.length) * 100);
   const downPercent = 100 - upPercent - flatPercent;
-
   return {
     directionText: `東証の日足実績から、当日騰落率 ${latestReturnPct >= 0 ? '+' : ''}${latestReturnPct.toFixed(2)}% に近い過去局面（±${band.toFixed(2)}pt）を抽出しました。PTS→翌朝の実測ペアはまだ十分に蓄積されていないため、現段階では東証日足ベースの参考統計です。`,
     disclaimer: '過去の日足統計は翌営業日の寄り付き価格を保証するものではありません。',
@@ -102,7 +92,6 @@ async function fetchKioxiaThreeTradingDays1m(): Promise<MinuteBar[]> {
     },
   });
   if (!response.ok) throw new Error(`Yahoo 1m chart responded ${response.status}`);
-
   const json: any = await response.json();
   const result = json?.chart?.result?.[0];
   const timestamps: number[] = result?.timestamp || [];
@@ -113,21 +102,13 @@ async function fetchKioxiaThreeTradingDays1m(): Promise<MinuteBar[]> {
     const timestamp = Number(ts) * 1000;
     const parts = jstParts(timestamp);
     return {
-      timestamp,
-      date: parts.date,
-      time: parts.time,
-      minuteOfDay: parts.minuteOfDay,
-      open: Number(quote.open?.[i]),
-      high: Number(quote.high?.[i]),
-      low: Number(quote.low?.[i]),
-      close: Number(quote.close?.[i]),
-      volume: Number(quote.volume?.[i] || 0),
+      timestamp, date: parts.date, time: parts.time, minuteOfDay: parts.minuteOfDay,
+      open: Number(quote.open?.[i]), high: Number(quote.high?.[i]), low: Number(quote.low?.[i]),
+      close: Number(quote.close?.[i]), volume: Number(quote.volume?.[i] || 0),
     };
   }).filter((b) =>
-    Number.isFinite(b.open) && b.open > 0 &&
-    Number.isFinite(b.high) && b.high > 0 &&
-    Number.isFinite(b.low) && b.low > 0 &&
-    Number.isFinite(b.close) && b.close > 0 &&
+    Number.isFinite(b.open) && b.open > 0 && Number.isFinite(b.high) && b.high > 0 &&
+    Number.isFinite(b.low) && b.low > 0 && Number.isFinite(b.close) && b.close > 0 &&
     ((b.minuteOfDay >= 540 && b.minuteOfDay <= 690) || (b.minuteOfDay >= 750 && b.minuteOfDay <= 930))
   );
 
@@ -140,29 +121,17 @@ async function fetchKioxiaThreeTradingDays1m(): Promise<MinuteBar[]> {
   const cumulativeByDate = new Map<string, { pv: number; vol: number }>();
   return selected.map((b, index) => {
     const state = cumulativeByDate.get(b.date) || { pv: 0, vol: 0 };
-    if (b.volume > 0) {
-      state.pv += b.close * b.volume;
-      state.vol += b.volume;
-    }
+    if (b.volume > 0) { state.pv += b.close * b.volume; state.vol += b.volume; }
     cumulativeByDate.set(b.date, state);
     const vwap = state.vol > 0 ? state.pv / state.vol : b.close;
     return {
-      time: b.time,
-      timestamp: b.timestamp,
-      open: Math.round(b.open),
-      high: Math.round(b.high),
-      low: Math.round(b.low),
-      close: Math.round(b.close),
-      volume: Math.max(0, Math.round(b.volume)),
-      vwap: Math.round(vwap),
-      ma20: Math.round(sma(closes, index, 20)),
-      ma75: Math.round(sma(closes, index, 75)),
+      time: b.time, timestamp: b.timestamp, open: Math.round(b.open), high: Math.round(b.high),
+      low: Math.round(b.low), close: Math.round(b.close), volume: Math.max(0, Math.round(b.volume)),
+      vwap: Math.round(vwap), ma20: Math.round(sma(closes, index, 20)), ma75: Math.round(sma(closes, index, 75)),
     };
   });
 }
 
-// Vercel rewrites every /api/* request to this single function and passes the
-// original sub-path in ?path=. Reconstruct the Express URL before dispatching.
 export default async function handler(req: Request, res: Response) {
   const rawPath = req.query.path;
   const pathValue = Array.isArray(rawPath) ? rawPath.join('/') : String(rawPath || '');
@@ -178,13 +147,21 @@ export default async function handler(req: Request, res: Response) {
     req.url = `/api/${pathValue}${search.size ? `?${search.toString()}` : ''}`;
   }
 
+  if (pathValue === 'market/kioxia-intraday-1m') {
+    try {
+      const data = await fetchKioxiaThreeTradingDays1m();
+      const dates = [...new Set(data.map((b) => jstParts(b.timestamp).date))];
+      return res.status(200).json({ data, dates, interval: '1m', tradingDays: dates.length, source: 'Yahoo Finance chart API (285A.T)' });
+    } catch (error) {
+      console.error('[KIOXIA 1m/3d] endpoint failed:', error instanceof Error ? error.message : String(error));
+      return res.status(502).json({ data: [], dates: [], interval: '1m', tradingDays: 0, error: '1分足データを取得できませんでした' });
+    }
+  }
+
   let intraday1m3d: MinuteBar[] = [];
   if (pathValue === 'market/kioxia') {
-    try {
-      intraday1m3d = await fetchKioxiaThreeTradingDays1m();
-    } catch (error) {
-      console.warn('[KIOXIA 1m/3d] fetch failed:', error instanceof Error ? error.message : String(error));
-    }
+    try { intraday1m3d = await fetchKioxiaThreeTradingDays1m(); }
+    catch (error) { console.warn('[KIOXIA 1m/3d] fetch failed:', error instanceof Error ? error.message : String(error)); }
 
     const originalJson = res.json.bind(res);
     res.json = ((body: any) => {
