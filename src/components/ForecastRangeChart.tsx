@@ -23,6 +23,7 @@ type ForecastApiPoint = {
   upProbability: number;
   neighborCount: number;
   avgDistance: number;
+  modelSource?: string;
 };
 
 type ForecastResponse = {
@@ -31,18 +32,22 @@ type ForecastResponse = {
   mode: 'INTRADAY' | 'NEXT_SESSION';
   anchor: 'CURRENT_TSE' | 'TSE_CLOSE';
   historicalBarCount: number;
+  historicalDailyCount?: number;
   confidence: 'HIGH' | 'MODERATE' | 'LOW';
   horizons: ForecastApiPoint[];
   backtest: {
     samples: number;
     maePct: number | null;
+    baselineMaePct?: number | null;
+    skillVsZeroPct?: number | null;
     directionAccuracyPct: number | null;
     interval68CoveragePct: number | null;
     methodology: string;
   };
   crossMarket: {
     score: number;
-    adjustmentPerHourPct: number;
+    intradayAdjustmentPerHourPct?: number;
+    overnightAdjustmentPct?: number;
     coverage: number;
   };
 };
@@ -162,6 +167,7 @@ export const ForecastRangeChart: React.FC<ForecastRangeChartProps> = ({ kioxia }
   const last = chartData[chartData.length - 1];
   const confidenceText = forecast.confidence === 'HIGH' ? '高' : forecast.confidence === 'MODERATE' ? '中' : '低';
   const modeText = isNextSession ? '次営業日予測' : '場中短期予測';
+  const skill = forecast.backtest.skillVsZeroPct;
 
   return (
     <section id="forecast-range-chart" className="bg-[#161B22] border border-gray-800 rounded p-2.5 flex flex-col gap-2">
@@ -173,18 +179,21 @@ export const ForecastRangeChart: React.FC<ForecastRangeChartProps> = ({ kioxia }
           </div>
           <p className="text-[9px] text-gray-500 mt-1">
             {isNextSession
-              ? '市場終了後はPTSを学習済みデータと偽って使わず、過去の引け状態→翌営業日の実測分布を予測します。'
+              ? '翌寄付は2年分の日足類似局面、9:30/10:00は30日分の5分足引け状態を使用。PTSは学習データと偽らず参考値として分離します。'
               : '場中は285Aの5分足類似局面・時間帯・OHLCV・米国半導体連動から短期レンジを推定します。'}
           </p>
         </div>
-        <div className="flex items-center gap-2 text-[9px] font-mono">
+        <div className="flex items-center gap-2 text-[9px] font-mono flex-wrap justify-end">
           <span className="px-1.5 py-0.5 rounded border border-cyan-800/60 text-cyan-300 bg-cyan-950/30">{modeText}</span>
-          <span className="px-1.5 py-0.5 rounded border border-cyan-800/60 text-cyan-300 bg-cyan-950/30">履歴 {forecast.historicalBarCount.toLocaleString()}本</span>
-          <span className="px-1.5 py-0.5 rounded border border-gray-700 text-gray-300">信頼度 {confidenceText}</span>
+          <span className="px-1.5 py-0.5 rounded border border-cyan-800/60 text-cyan-300 bg-cyan-950/30">5分足 {forecast.historicalBarCount.toLocaleString()}本</span>
+          {forecast.historicalDailyCount ? (
+            <span className="px-1.5 py-0.5 rounded border border-cyan-800/60 text-cyan-300 bg-cyan-950/30">日足 {forecast.historicalDailyCount.toLocaleString()}本</span>
+          ) : null}
+          <span className={`px-1.5 py-0.5 rounded border ${forecast.confidence === 'LOW' ? 'border-amber-800 text-amber-300' : 'border-gray-700 text-gray-300'}`}>信頼度 {confidenceText}</span>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
         <div className="bg-[#0D1117] border border-gray-800 rounded p-2">
           <div className="text-[9px] text-gray-500">予測基準</div>
           <div className="text-sm font-mono font-bold text-white">{yen(basePrice)}</div>
@@ -210,6 +219,13 @@ export const ForecastRangeChart: React.FC<ForecastRangeChartProps> = ({ kioxia }
           <div className="text-sm font-mono font-bold text-white">{forecast.backtest.directionAccuracyPct != null ? `${forecast.backtest.directionAccuracyPct.toFixed(1)}%` : '---'}</div>
           <div className="text-[9px] text-gray-400">未来データ不使用</div>
         </div>
+        <div className="bg-[#0D1117] border border-gray-800 rounded p-2">
+          <div className="text-[9px] text-gray-500">ゼロ予測比スキル</div>
+          <div className={`text-sm font-mono font-bold ${skill != null && skill > 0 ? 'text-emerald-300' : 'text-amber-300'}`}>
+            {skill != null ? `${skill > 0 ? '+' : ''}${skill.toFixed(1)}%` : '---'}
+          </div>
+          <div className="text-[9px] text-gray-400">基準MAE {forecast.backtest.baselineMaePct != null ? `${forecast.backtest.baselineMaePct.toFixed(2)}%` : '---'}</div>
+        </div>
       </div>
 
       <div className="h-[270px] w-full bg-[#0D1117] border border-gray-800 rounded p-1">
@@ -232,15 +248,15 @@ export const ForecastRangeChart: React.FC<ForecastRangeChartProps> = ({ kioxia }
       <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-[9px]">
         <div className="flex items-start gap-1.5 text-gray-400">
           <Activity className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-          類似局面はモメンタム・変動率・レンジ・出来高・日中位置を正規化して近傍検索し、中心値と68%/90%レンジを実測分布から計算します。
+          類似局面の距離で重み付けし、中心値と68%/90%レンジを実測リターン分布から算出します。単一価格の断定予測ではありません。
         </div>
         <div className="flex items-start gap-1.5 text-gray-400">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-          検証はwalk-forward方式で、各テスト時点より後の観測値を学習側へ混ぜません。
+          Walk-forward検証に加えて「変化なし予測」のMAEを基準に比較し、基準を十分上回らない場合は信頼度を自動的に下げます。
         </div>
         <div className="flex items-start gap-1.5 text-gray-400">
           <TriangleAlert className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-          予測レンジは保証価格ではありません。PTS履歴が十分になるまではPTS現在値を参考表示に限定し、予測精度を過大表示しません。
+          予測レンジは保証価格ではありません。PTS履歴が十分になるまではPTS現在値を参考表示に限定し、精度を過大表示しません。
         </div>
       </div>
     </section>
