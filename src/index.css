@@ -15,7 +15,9 @@ html {
 .text-\[10px\] { font-size: calc(10px * var(--app-font-scale)); }
 .text-\[11px\] { font-size: calc(11px * var(--app-font-scale)); }
 
-/* Recharts and SVG labels may otherwise remain at fixed pixel sizes. */
-svg text {
-  font-size: calc(1em * var(--app-font-scale));
-}
+/* Scale only fixed-size SVG/chart labels; avoid double-scaling all SVG text. */
+svg text[font-size="7.5"] { font-size: calc(7.5px * var(--app-font-scale)); }
+svg text[font-size="8"] { font-size: calc(8px * var(--app-font-scale)); }
+.recharts-cartesian-axis-tick-value { font-size: calc(9px * var(--app-font-scale)) !important; }
+.recharts-legend-wrapper { font-size: calc(9px * var(--app-font-scale)) !important; }
+.recharts-tooltip-wrapper { font-size: calc(10px * var(--app-font-scale)) !important; }
