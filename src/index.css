@@ -1,11 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  --app-font-scale: 1.15;
+  --app-font-scale: 1.5;
 }
 
 html {
   font-size: calc(16px * var(--app-font-scale));
+}
+
+body {
+  overflow-x: hidden;
 }
 
 /* Tailwind arbitrary pixel labels do not inherit the root rem scale. */
@@ -21,3 +25,58 @@ svg text[font-size="8"] { font-size: calc(8px * var(--app-font-scale)); }
 .recharts-cartesian-axis-tick-value { font-size: calc(9px * var(--app-font-scale)) !important; }
 .recharts-legend-wrapper { font-size: calc(9px * var(--app-font-scale)) !important; }
 .recharts-tooltip-wrapper { font-size: calc(10px * var(--app-font-scale)) !important; }
+
+/* Large-font safety: text must wrap inside its own card instead of colliding with neighbours. */
+#root section,
+#root section *,
+#root main,
+#root main * {
+  min-width: 0;
+}
+
+#root section p,
+#root section h1,
+#root section h2,
+#root section h3,
+#root section span,
+#root section div {
+  overflow-wrap: anywhere;
+}
+
+/* At desktop widths the 150% view needs more horizontal room per information card.
+   Keep the analysis column readable and move the US/news rail below it. */
+@media (min-width: 1024px) {
+  main > div.grid.grid-cols-1.lg\:grid-cols-12 {
+    grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+  }
+  main > div.grid.grid-cols-1.lg\:grid-cols-12 > div:nth-child(1) {
+    grid-column: span 4 / span 4 !important;
+  }
+  main > div.grid.grid-cols-1.lg\:grid-cols-12 > div:nth-child(2) {
+    grid-column: span 8 / span 8 !important;
+  }
+  main > div.grid.grid-cols-1.lg\:grid-cols-12 > div:nth-child(3) {
+    grid-column: 1 / -1 !important;
+  }
+
+  #price-key-metrics > div {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  #us-semi-market-section > div.grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 1023px) {
+  #price-key-metrics > div {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 639px) {
+  #price-key-metrics > div,
+  #us-semi-market-section > div.grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
