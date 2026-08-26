@@ -25,6 +25,23 @@ const formatJstShortDate = (timestamp: number) => {
   }).format(new Date(timestamp));
 };
 
+const formatJstTime = (timestamp: number) => {
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return '--:--';
+  return new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(new Date(timestamp));
+};
+
+const jstMinutesOfDay = (timestamp: number) => {
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return -1;
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(new Date(timestamp));
+  const p: Record<string, string> = {};
+  parts.forEach(({ type, value }) => { p[type] = value; });
+  return Number(p.hour) * 60 + Number(p.minute);
+};
+
 const formatJstDateTime = (timestamp: number) => {
   if (!Number.isFinite(timestamp) || timestamp <= 0) return '日時不明';
   return new Intl.DateTimeFormat('ja-JP', {
@@ -89,6 +106,35 @@ export const CandleChart: React.FC<CandleChartProps> = ({ hourly1h, daily1d }) =
     return groups;
   }, [data]);
 
+  const intradayTimeTicks = useMemo(() => {
+    if (timeframe !== '1m3d' || !data?.length) return [] as { index: number; label: string; dayKey: string }[];
+    const targetMinutes = [9 * 60, 10 * 60, 11 * 60, 12 * 60 + 30, 13 * 60, 14 * 60, 15 * 60];
+    const ticks: { index: number; label: string; dayKey: string }[] = [];
+
+    dayGroups.forEach((group) => {
+      const groupBars = data.slice(group.start, group.end + 1);
+      targetMinutes.forEach((target) => {
+        let bestLocalIndex = -1;
+        let bestDiff = Number.POSITIVE_INFINITY;
+        groupBars.forEach((bar, localIndex) => {
+          const mins = jstMinutesOfDay(bar.timestamp);
+          const diff = Math.abs(mins - target);
+          if (diff < bestDiff) {
+            bestDiff = diff;
+            bestLocalIndex = localIndex;
+          }
+        });
+        // Keep labels only when a real bar exists close to the requested clock time.
+        if (bestLocalIndex >= 0 && bestDiff <= 6) {
+          const index = group.start + bestLocalIndex;
+          ticks.push({ index, label: formatJstTime(data[index].timestamp), dayKey: group.key });
+        }
+      });
+    });
+
+    return ticks;
+  }, [timeframe, data, dayGroups]);
+
   if (timeframe === '1m3d' && minuteLoading && !minuteData.length) {
     return <div className="bg-[#161B22] border border-gray-800 rounded p-4 text-center text-gray-400 text-xs">直近3取引日の1分足を取得中...</div>;
   }
@@ -110,7 +156,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({ hourly1h, daily1d }) =
   const width = 900;
   const mainHeight = 240;
   const volHeight = 52;
-  const bottomLabelHeight = 26;
+  const bottomLabelHeight = timeframe === '1m3d' ? 42 : 26;
   const paddingX = 42;
   const chartWidth = width - paddingX * 2;
   const getX = (i: number) => data.length <= 1 ? paddingX : paddingX + (i / (data.length - 1)) * chartWidth;
@@ -197,10 +243,19 @@ export const CandleChart: React.FC<CandleChartProps> = ({ hourly1h, daily1d }) =
             </g>;
           })}
 
-          {timeframe === '1m3d' ? dayGroups.map((group) => {
-            const center = getX((group.start + group.end) / 2);
-            return <text key={`label-${group.key}`} x={center} y={mainHeight+volHeight+20} fill="#CBD5E1" fontSize="9" textAnchor="middle" fontFamily="monospace">{formatJstShortDate(group.timestamp)}</text>;
-          }) : data.map((d, i) => i % Math.ceil(data.length/7) === 0 ? <text key={`x-${i}`} x={getX(i)} y={mainHeight+volHeight+20} fill="#9CA3AF" fontSize="8" textAnchor="middle" fontFamily="monospace">{formatJstShortDate(d.timestamp)}</text> : null)}
+          {timeframe === '1m3d' ? <>
+            {intradayTimeTicks.map((tick) => {
+              const x = getX(tick.index);
+              return <g key={`time-${tick.dayKey}-${tick.index}`}>
+                <line x1={x} y1={mainHeight+volHeight+4} x2={x} y2={mainHeight+volHeight+8} stroke="#64748B" strokeWidth="0.7"/>
+                <text x={x} y={mainHeight+volHeight+17} fill="#94A3B8" fontSize="7" textAnchor="middle" fontFamily="monospace">{tick.label}</text>
+              </g>;
+            })}
+            {dayGroups.map((group) => {
+              const center = getX((group.start + group.end) / 2);
+              return <text key={`label-${group.key}`} x={center} y={mainHeight+volHeight+34} fill="#E2E8F0" fontSize="9" fontWeight="600" textAnchor="middle" fontFamily="monospace">{formatJstShortDate(group.timestamp)}</text>;
+            })}
+          </> : data.map((d, i) => i % Math.ceil(data.length/7) === 0 ? <text key={`x-${i}`} x={getX(i)} y={mainHeight+volHeight+20} fill="#9CA3AF" fontSize="8" textAnchor="middle" fontFamily="monospace">{formatJstShortDate(d.timestamp)}</text> : null)}
 
           {hoverIndex !== null && <line x1={getX(hoverIndex)} y1={0} x2={getX(hoverIndex)} y2={mainHeight+volHeight} stroke="#60A5FA" strokeDasharray="2 2" strokeWidth="1"/>}
         </svg>
