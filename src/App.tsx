@@ -14,10 +14,7 @@ import { AlertSettingsModal } from './components/AlertSettingsModal';
 import { DataSourcesModal } from './components/DataSourcesModal';
 import { DisclaimerFooter } from './components/DisclaimerFooter';
 
-import {
-  RealApiMarketDataProvider,
-  RealNewsProvider,
-} from './services/marketData';
+import { RealApiMarketDataProvider, RealNewsProvider } from './services/marketData';
 import {
   calculateScoreBreakdown,
   determineSignal,
@@ -26,12 +23,7 @@ import {
   assessChasingRisk,
   assessRapidDrop,
 } from './services/analysisEngine';
-import {
-  KioxiaMarketData,
-  UsSemiQuote,
-  NewsItem,
-  AiCommentResult,
-} from './types';
+import { KioxiaMarketData, UsSemiQuote, NewsItem, AiCommentResult } from './types';
 
 const ForecastRangeChart = React.lazy(() =>
   import('./components/ForecastRangeChart').then((m) => ({ default: m.ForecastRangeChart }))
@@ -39,22 +31,31 @@ const ForecastRangeChart = React.lazy(() =>
 
 const marketDataProvider = new RealApiMarketDataProvider();
 const newsProvider = new RealNewsProvider();
+const FONT_SCALES = [0.9, 1, 1.15, 1.3, 1.5] as const;
 
 export default function App() {
   const [kioxia, setKioxia] = useState<KioxiaMarketData | null>(null);
   const [usQuotes, setUsQuotes] = useState<UsSemiQuote[]>([]);
   const [news, setNews] = useState<NewsItem[]>([]);
   const [aiComment, setAiComment] = useState<AiCommentResult | null>(null);
-
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isDemoMode, setIsDemoMode] = useState(false);
-
+  const [fontScaleIndex, setFontScaleIndex] = useState(() => {
+    if (typeof window === 'undefined') return 2;
+    const saved = Number(window.localStorage.getItem('kioxia-font-scale-index'));
+    return Number.isInteger(saved) && saved >= 0 && saved < FONT_SCALES.length ? saved : 2;
+  });
   const [isPortfolioOpen, setIsPortfolioOpen] = useState(false);
   const [isBacktestOpen, setIsBacktestOpen] = useState(false);
   const [isScoreBreakdownOpen, setIsScoreBreakdownOpen] = useState(false);
   const [isAlertsOpen, setIsAlertsOpen] = useState(false);
   const [isDataSourcesOpen, setIsDataSourcesOpen] = useState(false);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--app-font-scale', String(FONT_SCALES[fontScaleIndex]));
+    window.localStorage.setItem('kioxia-font-scale-index', String(fontScaleIndex));
+  }, [fontScaleIndex]);
 
   const fetchData = useCallback(async (demoMode = isDemoMode) => {
     setIsRefreshing(true);
@@ -64,7 +65,6 @@ export default function App() {
         marketDataProvider.getUsSemiQuotes(demoMode),
         newsProvider.getSectorNews(),
       ]);
-
       setKioxia(kData);
       setUsQuotes(usData);
       setNews(nData);
@@ -76,80 +76,37 @@ export default function App() {
   }, [isDemoMode]);
 
   const lastAiFetchRef = React.useRef<{ time: number; key: string }>({ time: 0, key: '' });
+  const fetchAiComment = useCallback(async (kData: KioxiaMarketData, quotes: UsSemiQuote[], scoreBreakdown: any, signal: string, force = false) => {
+    const now = Date.now();
+    const currentKey = `${signal}_${Math.round(kData.price / 20) * 20}_${Math.round((scoreBreakdown?.total || 0) / 10) * 10}`;
+    if (!force && lastAiFetchRef.current.key === currentKey && now - lastAiFetchRef.current.time < 60000) return;
+    lastAiFetchRef.current = { time: now, key: currentKey };
+    setIsAiLoading(true);
+    try {
+      const res = await fetch('/api/ai/market-comment', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kioxia: kData, usQuotes: quotes, scoreBreakdown, signal }),
+      });
+      if (res.ok) setAiComment(await res.json());
+    } catch (err) { console.error('AI comment API error:', err); }
+    finally { setIsAiLoading(false); }
+  }, []);
 
-  const fetchAiComment = useCallback(
-    async (
-      kData: KioxiaMarketData,
-      quotes: UsSemiQuote[],
-      scoreBreakdown: any,
-      signal: string,
-      force = false
-    ) => {
-      const now = Date.now();
-      const currentKey = `${signal}_${Math.round(kData.price / 20) * 20}_${Math.round((scoreBreakdown?.total || 0) / 10) * 10}`;
-
-      if (!force && lastAiFetchRef.current.key === currentKey && now - lastAiFetchRef.current.time < 60000) {
-        return;
-      }
-
-      lastAiFetchRef.current = { time: now, key: currentKey };
-      setIsAiLoading(true);
-      try {
-        const res = await fetch('/api/ai/market-comment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            kioxia: kData,
-            usQuotes: quotes,
-            scoreBreakdown,
-            signal,
-          }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setAiComment(data);
-        }
-      } catch (err) {
-        console.error('AI comment API error:', err);
-      } finally {
-        setIsAiLoading(false);
-      }
-    },
-    []
-  );
-
-  useEffect(() => {
-    fetchData(isDemoMode);
-  }, [fetchData, isDemoMode]);
-
+  useEffect(() => { fetchData(isDemoMode); }, [fetchData, isDemoMode]);
   useEffect(() => {
     if (kioxia && usQuotes.length > 0) {
-      const isDataValid = kioxia.price > 0 && kioxia.dataFreshness !== 'FAILED' && kioxia.dataFreshness !== 'UNAVAILABLE';
+      const valid = kioxia.price > 0 && kioxia.dataFreshness !== 'FAILED' && kioxia.dataFreshness !== 'UNAVAILABLE';
       const breakdown = calculateScoreBreakdown(kioxia, usQuotes, news);
-      const sig = determineSignal(breakdown.total, kioxia, isDataValid);
+      const sig = determineSignal(breakdown.total, kioxia, valid);
       fetchAiComment(kioxia, usQuotes, breakdown, sig.signal, false);
     }
   }, [kioxia, usQuotes, news, fetchAiComment]);
-
   useEffect(() => {
-    const timer = setInterval(() => {
-      fetchData(isDemoMode);
-    }, 30000);
+    const timer = setInterval(() => fetchData(isDemoMode), 30000);
     return () => clearInterval(timer);
   }, [fetchData, isDemoMode]);
 
-  if (!kioxia) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-[#0B0E11] text-gray-200">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-          <div className="text-xs font-mono text-gray-400">
-            KIOXIA SIGNAL リアルタイム市場エンジン起動中...
-          </div>
-        </div>
-      </div>
-    );
-  }
+  if (!kioxia) return <div className="flex items-center justify-center min-h-screen bg-[#0B0E11] text-gray-200"><div className="flex flex-col items-center gap-3"><div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div><div className="text-xs font-mono text-gray-400">KIOXIA SIGNAL リアルタイム市場エンジン起動中...</div></div></div>;
 
   const isDataValid = kioxia.price > 0 && kioxia.dataFreshness !== 'FAILED';
   const scoreBreakdown = calculateScoreBreakdown(kioxia, usQuotes, news);
@@ -161,111 +118,39 @@ export default function App() {
 
   return (
     <div className="min-h-screen w-full bg-[#0B0E11] text-gray-200 font-sans flex flex-col antialiased selection:bg-blue-600 selection:text-white">
-      <Header
-        kioxia={kioxia}
-        marketRegime={marketRegime}
-        isRefreshing={isRefreshing}
-        onRefresh={() => fetchData(isDemoMode)}
-        onOpenPortfolio={() => setIsPortfolioOpen(true)}
-        onOpenBacktest={() => setIsBacktestOpen(true)}
-        onOpenAlerts={() => setIsAlertsOpen(true)}
-        onOpenBreakdown={() => setIsScoreBreakdownOpen(true)}
-        onOpenDataSources={() => setIsDataSourcesOpen(true)}
-        isLiveMode={!isDemoMode}
-        onToggleLiveMode={() => {
-          const nextMode = !isDemoMode;
-          setIsDemoMode(nextMode);
-          fetchData(nextMode);
-        }}
-      />
+      <Header kioxia={kioxia} marketRegime={marketRegime} isRefreshing={isRefreshing} onRefresh={() => fetchData(isDemoMode)} onOpenPortfolio={() => setIsPortfolioOpen(true)} onOpenBacktest={() => setIsBacktestOpen(true)} onOpenAlerts={() => setIsAlertsOpen(true)} onOpenBreakdown={() => setIsScoreBreakdownOpen(true)} onOpenDataSources={() => setIsDataSourcesOpen(true)} isLiveMode={!isDemoMode} onToggleLiveMode={() => { const nextMode = !isDemoMode; setIsDemoMode(nextMode); fetchData(nextMode); }} />
+
+      <div className="sticky top-0 z-40 flex justify-end px-2 md:px-3 pointer-events-none">
+        <div className="pointer-events-auto mt-1 flex items-center gap-1 rounded-md border border-gray-700 bg-[#161B22]/95 p-1 shadow-lg backdrop-blur" aria-label="文字サイズ変更">
+          <span className="px-1.5 text-xs text-gray-400">文字</span>
+          <button type="button" onClick={() => setFontScaleIndex((i) => Math.max(0, i - 1))} disabled={fontScaleIndex === 0} className="min-w-8 rounded border border-gray-700 px-2 py-1 text-sm font-bold hover:bg-gray-700 disabled:opacity-30" aria-label="文字を小さくする">A−</button>
+          <button type="button" onClick={() => setFontScaleIndex(2)} className="min-w-10 rounded border border-gray-700 px-2 py-1 text-xs hover:bg-gray-700" aria-label="標準の文字サイズに戻す">標準</button>
+          <button type="button" onClick={() => setFontScaleIndex((i) => Math.min(FONT_SCALES.length - 1, i + 1))} disabled={fontScaleIndex === FONT_SCALES.length - 1} className="min-w-8 rounded border border-gray-700 px-2 py-1 text-base font-bold hover:bg-gray-700 disabled:opacity-30" aria-label="文字を大きくする">A＋</button>
+          <span className="min-w-10 px-1 text-center text-xs tabular-nums text-blue-300">{Math.round(FONT_SCALES[fontScaleIndex] * 100)}%</span>
+        </div>
+      </div>
 
       <main className="flex-1 p-2 md:p-3 max-w-[1720px] w-full mx-auto flex flex-col gap-2.5">
-        <ThreeTierPricePanel
-          kioxia={kioxia}
-          usQuotes={usQuotes}
-          news={news}
-          isDemoMode={isDemoMode}
-        />
-
+        <ThreeTierPricePanel kioxia={kioxia} usQuotes={usQuotes} news={news} isDemoMode={isDemoMode} />
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5">
           <div className="lg:col-span-4 xl:col-span-3 flex flex-col gap-2.5">
-            <SignalScoreCard
-              signalInfo={signalInfo}
-              scoreBreakdown={scoreBreakdown}
-              buyCandidates={buyCandidates}
-              chasingRisk={chasingRisk}
-              dropAssessment={dropAssessment}
-              onOpenBreakdown={() => setIsScoreBreakdownOpen(true)}
-            />
-
-            <AiCommentCard
-              aiComment={aiComment}
-              isLoading={isAiLoading}
-              onRefreshComment={() =>
-                fetchAiComment(kioxia, usQuotes, scoreBreakdown, signalInfo.signal, true)
-              }
-            />
+            <SignalScoreCard signalInfo={signalInfo} scoreBreakdown={scoreBreakdown} buyCandidates={buyCandidates} chasingRisk={chasingRisk} dropAssessment={dropAssessment} onOpenBreakdown={() => setIsScoreBreakdownOpen(true)} />
+            <AiCommentCard aiComment={aiComment} isLoading={isAiLoading} onRefreshComment={() => fetchAiComment(kioxia, usQuotes, scoreBreakdown, signalInfo.signal, true)} />
           </div>
-
           <div className="lg:col-span-8 xl:col-span-6 flex flex-col gap-2.5">
             <PriceKeyMetrics kioxia={kioxia} />
-
-            <CandleChart
-              intraday5m={kioxia.intraday5m}
-              hourly1h={kioxia.hourly1h}
-              daily1d={kioxia.daily1d}
-              currentPrice={kioxia.price}
-              currentVwap={kioxia.vwap}
-            />
-
-            <React.Suspense
-              fallback={
-                <section className="bg-[#161B22] border border-gray-800 rounded p-3 text-xs text-gray-400">
-                  定量予測グラフを読み込み中...
-                </section>
-              }
-            >
-              <ForecastRangeChart kioxia={kioxia} />
-            </React.Suspense>
+            <CandleChart intraday5m={kioxia.intraday5m} hourly1h={kioxia.hourly1h} daily1d={kioxia.daily1d} currentPrice={kioxia.price} currentVwap={kioxia.vwap} />
+            <React.Suspense fallback={<section className="bg-[#161B22] border border-gray-800 rounded p-3 text-xs text-gray-400">定量予測グラフを読み込み中...</section>}><ForecastRangeChart kioxia={kioxia} /></React.Suspense>
           </div>
-
-          <div className="lg:col-span-12 xl:col-span-3 flex flex-col gap-2.5">
-            <UsSemiMarket quotes={usQuotes} />
-            <NewsFeed news={news} />
-          </div>
+          <div className="lg:col-span-12 xl:col-span-3 flex flex-col gap-2.5"><UsSemiMarket quotes={usQuotes} /><NewsFeed news={news} /></div>
         </div>
       </main>
-
       <DisclaimerFooter lastUpdated={kioxia.lastUpdated} />
-
-      <PortfolioModal
-        isOpen={isPortfolioOpen}
-        onClose={() => setIsPortfolioOpen(false)}
-        kioxiaCurrentPrice={kioxia.price}
-      />
-
-      <BacktestModal
-        isOpen={isBacktestOpen}
-        onClose={() => setIsBacktestOpen(false)}
-      />
-
-      <ScoreBreakdownModal
-        isOpen={isScoreBreakdownOpen}
-        onClose={() => setIsScoreBreakdownOpen(false)}
-        breakdown={scoreBreakdown}
-      />
-
-      <AlertSettingsModal
-        isOpen={isAlertsOpen}
-        onClose={() => setIsAlertsOpen(false)}
-        kioxiaPrice={kioxia.price}
-      />
-
-      <DataSourcesModal
-        isOpen={isDataSourcesOpen}
-        onClose={() => setIsDataSourcesOpen(false)}
-        isLiveMode={!isDemoMode}
-      />
+      <PortfolioModal isOpen={isPortfolioOpen} onClose={() => setIsPortfolioOpen(false)} kioxiaCurrentPrice={kioxia.price} />
+      <BacktestModal isOpen={isBacktestOpen} onClose={() => setIsBacktestOpen(false)} />
+      <ScoreBreakdownModal isOpen={isScoreBreakdownOpen} onClose={() => setIsScoreBreakdownOpen(false)} breakdown={scoreBreakdown} />
+      <AlertSettingsModal isOpen={isAlertsOpen} onClose={() => setIsAlertsOpen(false)} kioxiaPrice={kioxia.price} />
+      <DataSourcesModal isOpen={isDataSourcesOpen} onClose={() => setIsDataSourcesOpen(false)} isLiveMode={!isDemoMode} />
     </div>
   );
 }
